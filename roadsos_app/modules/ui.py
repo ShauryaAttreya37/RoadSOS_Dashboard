@@ -271,6 +271,38 @@ h1, h2, h3, h4, h5, h6 {{
 }}
 .stSlider [data-baseweb="slider"] div {{ color: {GREEN} !important; }}
 
+/* Toggles: keep the track, knob, and label visible in both themes */
+[data-testid="stCheckbox"] {{
+    background: {c["CARD_BG"]} !important;
+    border: 1px solid {c["BORDER"]} !important;
+    border-radius: 8px !important;
+    padding: 0.85rem 1rem !important;
+}}
+[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p {{
+    color: {c["TEXT"]} !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.03em !important;
+}}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"] > input[type="checkbox"] + div {{
+    background-color: {c["MUTED"]} !important;
+    border: 1px solid {c["BORDER"]} !important;
+    box-shadow: inset 0 0 0 1px {c["BORDER"]} !important;
+}}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"] > input[type="checkbox"]:checked + div {{
+    background-color: {GREEN} !important;
+    border-color: {GREEN} !important;
+    box-shadow: inset 0 0 0 1px {GREEN} !important;
+}}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"] > input[type="checkbox"] + div > div {{
+    background-color: {c["CARD_BG"]} !important;
+    border: 1px solid {c["TEXT"]}44 !important;
+}}
+[data-testid="stCheckbox"] label[data-baseweb="checkbox"] > input[type="checkbox"]:focus-visible + div {{
+    outline: 3px solid {GREEN}55 !important;
+    outline-offset: 2px !important;
+}}
+
 /* Metrics */
 [data-testid="metric-container"] {{
     position: relative !important;
