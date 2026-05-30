@@ -2,10 +2,14 @@ import io
 import json
 from html import escape
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
 
 import qrcode
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile, save_profile

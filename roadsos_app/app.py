@@ -1,6 +1,12 @@
+import sys
+from pathlib import Path
+
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
+from roadsos_app.modules.config import get_secret
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -28,9 +34,9 @@ c = get_colors()
 def ai_engine_status() -> tuple[str, str]:
     """Report which AI provider is wired up, for the live status bar."""
     try:
-        if st.secrets.get("OPENROUTER_API_KEY"):
+        if get_secret("OPENROUTER_API_KEY"):
             return "OpenRouter", GREEN
-        if st.secrets.get("ANTHROPIC_API_KEY"):
+        if get_secret("ANTHROPIC_API_KEY"):
             return "Claude", GREEN
     except Exception:
         pass

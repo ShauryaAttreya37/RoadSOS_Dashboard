@@ -1,8 +1,13 @@
 import html
+import sys
+from pathlib import Path
 
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from roadsos_app.modules.emergency_numbers import get_emergency_numbers
+from roadsos_app.modules.config import get_secret
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
 from roadsos_app.modules.nearby_services import CACHE_SCHEMA_VERSION, count_total_contacts, eta_minutes, fetch_nearby_services
 from roadsos_app.modules.offline_cache import cache_age_hours, clear_cache, is_cache_fresh
@@ -147,7 +152,7 @@ with st.sidebar:
     st.header("Search Controls")
     radius_km = st.slider("Search radius", 1, 20, 5, format="%d km")
     max_results = st.selectbox("Results per category", [12, 24, 48, "All"], index=1)
-    service_provider_key = "google" if st.secrets.get("GOOGLE_MAPS_API_KEY") else "osm"
+    service_provider_key = "google" if get_secret("GOOGLE_MAPS_API_KEY") else "osm"
     cache_key = (
         f"{CACHE_SCHEMA_VERSION}_{service_provider_key}_{float(st.session_state.lat):.3f}_{float(st.session_state.lon):.3f}_{radius_km * 1000}"
         if has_location()
@@ -195,7 +200,7 @@ with st.spinner("Finding nearby services..."):
         lat = round(float(st.session_state.lat), 3)
         lon = round(float(st.session_state.lon), 3)
         radius_m = radius_km * 1000
-        google_maps_api_key = st.secrets.get("GOOGLE_MAPS_API_KEY")
+        google_maps_api_key = get_secret("GOOGLE_MAPS_API_KEY")
         services = cached_services(lat, lon, radius_m, google_maps_api_key)
         service_error = None
     except Exception as exc:
@@ -232,7 +237,7 @@ with c5:
 with c6:
     stat_card("Repair", counts["puncture_shop"] + counts["vehicle_rescue"], "nearby", GREEN)
 
-if not st.secrets.get("GOOGLE_MAPS_API_KEY"):
+if not get_secret("GOOGLE_MAPS_API_KEY"):
     st.info(
         "Service coverage currently uses OpenStreetMap. Add GOOGLE_MAPS_API_KEY to enrich every category with "
         "Google Places results, including service-area ambulance and towing providers that may not have mapped storefronts."
@@ -257,7 +262,7 @@ map_view_mode = st.radio(
 )
 
 road_radius_m = min(radius_m, MAX_ROAD_RADIUS_M)
-tomtom_key = st.secrets.get("TOMTOM_API_KEY")
+tomtom_key = get_secret("TOMTOM_API_KEY")
 road_error = None
 weather_error = None
 traffic_error = None

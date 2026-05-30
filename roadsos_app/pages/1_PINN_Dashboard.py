@@ -1,6 +1,11 @@
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roadsos_app.modules.ai_firstaid import generate_firstaid
 from roadsos_app.modules.emergency_numbers import get_emergency_numbers

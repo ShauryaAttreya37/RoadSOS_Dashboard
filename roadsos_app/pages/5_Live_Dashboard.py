@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import time
+import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile

@@ -1,9 +1,14 @@
 import html
+import sys
+from pathlib import Path
 
 import requests
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from roadsos_app.modules.ai_context import build_incident_context
+from roadsos_app.modules.config import get_secret
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
 from roadsos_app.modules.ui import (
     AMBER,
@@ -95,7 +100,7 @@ def get_anthropic_client():
         return None, "The anthropic package is not installed. Run pip install -r roadsos_app/requirements.txt."
 
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        api_key = get_secret("ANTHROPIC_API_KEY")
     except Exception:
         api_key = None
     if not api_key:
@@ -133,8 +138,8 @@ def ask_claude() -> str:
 
 def get_openrouter_config() -> tuple[str | None, str, str | None]:
     try:
-        api_key = st.secrets.get("OPENROUTER_API_KEY")
-        model = st.secrets.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
+        api_key = get_secret("OPENROUTER_API_KEY")
+        model = get_secret("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
     except Exception:
         api_key = None
         model = DEFAULT_OPENROUTER_MODEL
@@ -217,7 +222,7 @@ def provider_options() -> list[str]:
     others: list[str] = []
     for name, secret_key in (("OpenRouter", "OPENROUTER_API_KEY"), ("Claude", "ANTHROPIC_API_KEY")):
         try:
-            has_key = bool(st.secrets.get(secret_key))
+            has_key = bool(get_secret(secret_key))
         except Exception:
             has_key = False
         (configured if has_key else others).append(name)

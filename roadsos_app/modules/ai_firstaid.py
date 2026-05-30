@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import streamlit as st
 import requests
 
 from roadsos_app.modules.ai_context import build_incident_context
+from roadsos_app.modules.config import get_secret
 
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -73,7 +73,7 @@ Format as markdown with bold step numbers.
 """
     # 1. Try Anthropic if key is present
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        api_key = get_secret("ANTHROPIC_API_KEY")
         if api_key:
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
@@ -97,11 +97,11 @@ Format as markdown with bold step numbers.
 
 
 def _generate_openrouter_firstaid(prompt: str) -> str:
-    api_key = st.secrets.get("OPENROUTER_API_KEY")
+    api_key = get_secret("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not configured.")
 
-    model = st.secrets.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
+    model = get_secret("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
     response = requests.post(
         OPENROUTER_API_URL,
         headers={
