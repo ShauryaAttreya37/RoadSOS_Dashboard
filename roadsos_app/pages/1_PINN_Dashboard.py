@@ -8,7 +8,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roadsos_app.modules.ai_firstaid import generate_firstaid
-from roadsos_app.modules.emergency_numbers import get_emergency_numbers
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.inference import load_model, run_inference
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile
@@ -381,9 +381,10 @@ if crash_detected:
     
     col1, col2 = st.columns(2)
     with col1:
-        ambulance = get_emergency_numbers(st.session_state.get("country_code", "XX"))["ambulance"]
+        sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
+        sos_number = sos_profile["unified"]
         st.markdown(
-            f'<a href="tel:{ambulance}" class="btn-call" style="display:block; text-align:center; padding:12px; border-radius: 4px; margin-top: 1rem;">{micon("call", size=17)} Call Ambulance ({ambulance})</a>',
+            f'<a href="tel:{sos_number}" class="btn-call" style="display:block; text-align:center; padding:12px; border-radius: 4px; margin-top: 1rem;">{micon("sos", size=17)} Call Global SOS ({sos_number})</a>',
             unsafe_allow_html=True,
         )
     with col2:

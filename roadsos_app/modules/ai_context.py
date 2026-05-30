@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
-from roadsos_app.modules.emergency_numbers import get_emergency_numbers
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import has_location
 from roadsos_app.modules.profile_store import load_profile
 
@@ -33,7 +33,7 @@ def build_incident_context(
     resolved_country_name = str(country_name or st.session_state.get("country_name", "Unknown"))
     resolved_city = str(city or st.session_state.get("city", "Unknown"))
     source = str(location_source or st.session_state.get("location_source", "Unavailable"))
-    numbers = get_emergency_numbers(resolved_country_code)
+    sos_profile = get_global_sos_profile(resolved_country_code)
 
     if lat is not None and lon is not None:
         location = (
@@ -65,10 +65,12 @@ LOCATION:
 - {location}
 
 LOCAL EMERGENCY NUMBERS:
-- Ambulance: {numbers["ambulance"]}
-- Police: {numbers["police"]}
-- Fire brigade: {numbers["fire"]}
-- Unified emergency: {numbers["unified"]}
+- Ambulance: {sos_profile["ambulance"]}
+- Police: {sos_profile["police"]}
+- Fire brigade: {sos_profile["fire"]}
+- Unified SOS: {sos_profile["unified"]}
+- SOS coverage: {sos_profile["coverage"]}
+- SOS routing note: {sos_profile["note"]}
 
 {helmet_context}
 

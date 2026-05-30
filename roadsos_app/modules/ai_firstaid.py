@@ -4,6 +4,7 @@ import requests
 
 from roadsos_app.modules.ai_context import build_incident_context
 from roadsos_app.modules.config import get_secret
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -93,7 +94,16 @@ Format as markdown with bold step numbers.
         pass
 
     # 3. Fallback to static logic
-    return _fallback_firstaid(hic15, bric, injury_label, peak_accel_g, skid_preceded, blood_group, allergies)
+    return _fallback_firstaid(
+        hic15,
+        bric,
+        injury_label,
+        peak_accel_g,
+        skid_preceded,
+        blood_group,
+        allergies,
+        country_code,
+    )
 
 
 def _generate_openrouter_firstaid(prompt: str) -> str:
@@ -129,7 +139,9 @@ def _fallback_firstaid(
     skid_preceded: bool,
     blood_group: str,
     allergies: str,
+    country_code: str | None,
 ) -> str:
+    sos_profile = get_global_sos_profile(country_code or "XX")
     if injury_label == "SEVERE":
         severity_action = "Treat this as a severe head or spine injury and do not move the rider unless the scene is unsafe."
     elif injury_label == "MODERATE":
@@ -139,7 +151,7 @@ def _fallback_firstaid(
 
     skid_line = "Tell responders a skid likely preceded the crash." if skid_preceded else "Tell responders no clear skid warning preceded the impact."
     return (
-        f"**1.** Call ambulance service now and report HIC15 {hic15:.0f}, BrIC {bric:.3f}, peak impact {peak_accel_g:.1f} g, and severity {injury_label}.\n"
+        f"**1.** Call Global SOS {sos_profile['unified']} now and report HIC15 {hic15:.0f}, BrIC {bric:.3f}, peak impact {peak_accel_g:.1f} g, and severity {injury_label}.\n"
         f"**2.** {severity_action}\n"
         "**3.** Check breathing and heavy bleeding, and apply firm direct pressure to any severe bleeding with clean cloth.\n"
         f"**4.** Share medical details: blood group {blood_group}, allergies {allergies or 'None'}, and the RoadSoS crash profile.\n"

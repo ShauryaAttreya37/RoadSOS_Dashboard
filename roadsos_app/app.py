@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
 from roadsos_app.modules.config import get_secret
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -69,6 +70,7 @@ ai_name, ai_color = ai_engine_status()
 loc_city = st.session_state.get("city") or "Unknown"
 loc_source = st.session_state.get("location_source", "Unavailable")
 loc_color = GREEN if has_location() else AMBER
+sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
 
 st.markdown(
     '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.8rem;">'
@@ -89,7 +91,7 @@ with k2:
 with k3:
     stat_card("Offline Cache", "24", "hours", GREEN)
 with k4:
-    stat_card("Unified SOS", "112", "ready", RED)
+    stat_card("Global SOS", sos_profile["unified"], "ready", RED)
 
 # ── Module navigation ─────────────────────────────────────────────────────────
 st.markdown(
@@ -107,7 +109,7 @@ modules = [
     ("pages/3_Emergency_Profile.py", "badge", "Rider Profile & SOS",
      "Generate the emergency medical packet and scannable QR handoff for first responders."),
     ("pages/4_AI_Assistant.py", "smart_toy", "RoadSoS AI Assistant",
-     "Ask first-aid, road-crash, and India-specific legal procedure questions, grounded in your incident context."),
+     "Ask global first-aid and road-crash questions, with India-specific legal guidance when the incident is in India."),
     ("pages/5_Live_Dashboard.py", "sensors", "Live Helmet Stream",
      "Real-time IMU feed with rolling crash detection, skid prediction, and an auto-firing SOS event log."),
 ]

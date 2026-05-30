@@ -11,6 +11,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile
 from roadsos_app.modules.ui import (
@@ -37,6 +38,7 @@ render_location_sidebar()
 
 c = get_colors()
 is_dark = get_theme() == "dark"
+sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
 
 plt.style.use("dark_background")
 
@@ -246,8 +248,13 @@ elif crash_detected:
     if not st.session_state.live_sos_fired:
         st.session_state.live_sos_fired = True
         ts = time.strftime("%H:%M:%S")
-        st.session_state.live_alerts.append(f"{ts} — CRASH at {peak_accel:.1f}g")
-    alert_banner("crash", f"Impact {peak_accel:.1f}g — SOS packet auto-fired. Emergency contact notified.")
+        st.session_state.live_alerts.append(
+            f"{ts} — CRASH at {peak_accel:.1f}g — call Global SOS {sos_profile['unified']}"
+        )
+    alert_banner(
+        "crash",
+        f"Impact {peak_accel:.1f}g — SOS packet ready. Call Global SOS {sos_profile['unified']} now.",
+    )
 elif skid_detected:
     alert_banner("warning", f"P(skid)={skid_max:.2f} — Low-friction surface detected. Haptic alert firing.")
 else:

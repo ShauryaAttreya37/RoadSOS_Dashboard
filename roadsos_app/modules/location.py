@@ -3,7 +3,8 @@ from __future__ import annotations
 import requests
 import streamlit as st
 
-from roadsos_app.modules.ui import location_pill
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
+from roadsos_app.modules.ui import global_sos_card, location_pill
 
 
 IPAPI_URL = "https://ipapi.co/json/"
@@ -152,12 +153,17 @@ def has_location() -> bool:
 
 
 def render_location_sidebar() -> None:
+    country_name = str(st.session_state.get("country_name", "Unknown"))
+    global_sos_card(
+        country_name,
+        get_global_sos_profile(str(st.session_state.get("country_code", "XX"))),
+    )
     if has_location():
         location_pill(
             float(st.session_state.lat),
             float(st.session_state.lon),
             str(st.session_state.get("city", "")),
-            str(st.session_state.get("country_name", "")),
+            country_name,
             str(st.session_state.get("location_source", "Detected")),
         )
     else:

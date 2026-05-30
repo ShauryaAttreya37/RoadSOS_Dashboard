@@ -11,6 +11,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import has_location, init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile, save_profile
 from roadsos_app.modules.ui import (
@@ -38,6 +39,7 @@ render_location_sidebar()
 
 c = get_colors()
 is_dark = get_theme() == "dark"
+sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
 
 
 def safe_float(value: str) -> float | None:
@@ -100,6 +102,14 @@ sos_packet = {
     "allergies": allergies,
     "medical_conditions": conditions,
     "emergency_contact": emergency_contact,
+    "global_sos": {
+        "country_code": sos_profile["country_code"],
+        "unified": sos_profile["unified"],
+        "ambulance": sos_profile["ambulance"],
+        "police": sos_profile["police"],
+        "fire": sos_profile["fire"],
+        "coverage": sos_profile["coverage"],
+    },
     "handoff": "offline_qr",
     "timestamp": datetime.now().isoformat(timespec="seconds"),
 }
@@ -124,6 +134,10 @@ with right:
   </div>
   <div style="color:{c["MUTED"]};font-size:0.75rem;font-family:'Outfit';text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:0.25rem;">{micon("call", size=16, color=c["MUTED"])} Emergency contact</div>
   <div style="color:{GREEN};font-weight:800;font-size:1.15rem;font-family:'Outfit';letter-spacing:0.04em;">{safe_emergency_contact}</div>
+  <a href="tel:{escape(str(sos_profile["unified"]), quote=True)}" class="btn-call"
+     style="display:block;text-align:center;margin-top:1rem;padding:10px 12px;border-radius:6px;text-decoration:none;">
+    {micon("sos", size=17)} Call Global SOS ({escape(str(sos_profile["unified"]))})
+  </a>
 </div>
 """,
         unsafe_allow_html=True,

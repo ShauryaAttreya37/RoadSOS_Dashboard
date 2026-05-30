@@ -1002,8 +1002,10 @@ def stat_card(label: str, value: str | int | float, unit: str = "", color: str |
 
 def emergency_number_strip(country_name: str, numbers: dict[str, str]) -> None:
     items = "".join(
-        f'<div class="en-item" style="flex:1; min-width:100px;"><div class="en-num" style="color:{RED}; font-size:2.4rem;">{html.escape(v)}</div>'
-        f'<div class="en-label" style="font-size:0.8rem;">{html.escape(k.title())}</div></div>'
+        f'<a href="tel:{html.escape(v, quote=True)}" class="en-item" style="flex:1; min-width:100px; text-decoration:none;">'
+        f'<div class="en-num" style="color:{RED}; font-size:2.4rem;">{html.escape(v)}</div>'
+        f'<div class="en-label" style="font-size:0.8rem;">{html.escape(k.title())}</div>'
+        "</a>"
         for k, v in numbers.items()
     )
     st.markdown(
@@ -1011,6 +1013,35 @@ def emergency_number_strip(country_name: str, numbers: dict[str, str]) -> None:
 <div class="en-strip">
     <div class="en-title">{micon("bolt", size=22, color=RED, fill=True)} Quick Emergency Numbers — {html.escape(country_name)}</div>
     <div class="en-row" style="display:flex; justify-content:space-between; text-align:center;">{items}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def global_sos_card(country_name: str, profile: dict[str, object]) -> None:
+    c = get_colors()
+    sos_number = str(profile["unified"])
+    coverage = str(profile["coverage"])
+    note = str(profile["note"])
+    fallback = bool(profile["is_mobile_fallback"])
+    status_color = AMBER if fallback else RED
+    st.sidebar.markdown(
+        f"""
+<div style="background:{c["CARD_BG"]};border:1px solid {status_color}55;border-left:4px solid {status_color};
+     border-radius:12px;padding:14px 16px;margin:0 0 1rem;box-shadow:0 4px 12px rgba(0,0,0,0.16);">
+  <div style="color:{status_color};font-family:'Outfit';font-size:0.72rem;font-weight:800;
+       letter-spacing:0.1em;text-transform:uppercase;">{micon("sos", size=18, color=status_color, fill=True)} Global SOS</div>
+  <div style="color:{c["TEXT"]};font-size:1.55rem;font-weight:900;font-family:'Outfit';margin:0.25rem 0;">
+    {html.escape(sos_number)}
+  </div>
+  <div style="color:{c["MUTED"]};font-size:0.75rem;line-height:1.45;font-family:'Inter';">
+    {html.escape(country_name)} · {html.escape(coverage)}<br>{html.escape(note)}
+  </div>
+  <a href="tel:{html.escape(sos_number, quote=True)}" class="btn-call"
+     style="display:block;text-align:center;margin-top:0.8rem;padding:9px 10px;border-radius:6px;text-decoration:none;">
+    {micon("call", size=17)} Call SOS {html.escape(sos_number)}
+  </a>
 </div>
 """,
         unsafe_allow_html=True,

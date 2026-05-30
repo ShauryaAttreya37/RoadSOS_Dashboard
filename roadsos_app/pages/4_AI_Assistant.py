@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roadsos_app.modules.ai_context import build_incident_context
 from roadsos_app.modules.config import get_secret
+from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
 from roadsos_app.modules.ui import (
     AMBER,
@@ -38,12 +39,12 @@ is_dark = get_theme() == "dark"
 
 
 SYSTEM_PROMPT = """
-You are RoadSoS AI — a road safety expert, first-aid guide, and legal advisor for road accident situations in India.
+You are RoadSoS AI — a global road safety expert and first-aid guide for road accident situations.
 You help accident victims, bystanders, and emergency responders. You know:
-- WHO and Indian Red Cross first-aid protocols for road crashes
-- Indian traffic laws and rights of accident victims (Motor Vehicles Act)
+- WHO and Red Cross first-aid protocols for road crashes
+- Indian traffic laws and rights of accident victims (Motor Vehicles Act) when the incident is in India
 - How to guide bystanders step by step in an emergency
-- When to call 108 (ambulance), 100 (police), 112 (unified)
+- How to use the detected country's local emergency numbers and Global SOS fallback
 Keep answers concise, actionable, and calm. Use numbered steps for procedures.
 For crash first-aid, speak to a bystander unless the user clearly says they are the rider.
 Never advise moving a potentially head/spine-injured rider unless fire, traffic, water, or another immediate danger makes staying in place unsafe.
@@ -56,6 +57,18 @@ Do not use words like unconscious, unresponsive, not breathing, or severe bleedi
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OPENROUTER_MODEL = "openrouter/auto"
 DEFAULT_ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
+
+
+def emergency_fallback(error: str) -> str:
+    sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
+    return (
+        f"{error}\n\n"
+        f"1. Call Global SOS {sos_profile['unified']} immediately for a serious crash.\n"
+        "2. Do not move the rider unless the scene is unsafe.\n"
+        "3. Check breathing and look for heavy bleeding.\n"
+        "4. Keep the rider warm and still.\n"
+        "5. Share the GPS location and medical profile with responders."
+    )
 
 
 def render_user(message: str) -> None:
@@ -111,10 +124,7 @@ def get_anthropic_client():
 def ask_claude() -> str:
     client, error = get_anthropic_client()
     if error:
-        return (
-            f"{error}\n\n"
-            "Emergency fallback: call 112 immediately for serious crashes. Do not move the rider unless the scene is unsafe."
-        )
+        return emergency_fallback(error)
 
     try:
         system_prompt = f"{SYSTEM_PROMPT}\n\n{build_incident_context()}"
@@ -126,14 +136,7 @@ def ask_claude() -> str:
         ) as stream:
             return st.write_stream(stream.text_stream)
     except Exception as exc:
-        return (
-            f"RoadSoS AI could not reach Claude: {exc}\n\n"
-            "1. Call 112 or the local ambulance number immediately.\n"
-            "2. Do not move the rider unless the scene is unsafe.\n"
-            "3. Check breathing and severe bleeding.\n"
-            "4. Keep the rider warm and still.\n"
-            "5. Share GPS location and medical details with responders."
-        )
+        return emergency_fallback(f"RoadSoS AI could not reach Claude: {exc}")
 
 
 def get_openrouter_config() -> tuple[str | None, str, str | None]:
@@ -151,10 +154,7 @@ def get_openrouter_config() -> tuple[str | None, str, str | None]:
 def ask_openrouter() -> str:
     api_key, model, error = get_openrouter_config()
     if error:
-        return (
-            f"{error}\n\n"
-            "Emergency fallback: call 112 immediately for serious crashes. Do not move the rider unless the scene is unsafe."
-        )
+        return emergency_fallback(error)
 
     try:
         import json as _json
@@ -200,14 +200,7 @@ def ask_openrouter() -> str:
 
         return st.write_stream(_token_stream())
     except Exception as exc:
-        return (
-            f"RoadSoS AI could not reach OpenRouter: {exc}\n\n"
-            "1. Call 112 or the local ambulance number immediately.\n"
-            "2. Do not move the rider unless the scene is unsafe.\n"
-            "3. Check breathing and severe bleeding.\n"
-            "4. Keep the rider warm and still.\n"
-            "5. Share GPS location and medical details with responders."
-        )
+        return emergency_fallback(f"RoadSoS AI could not reach OpenRouter: {exc}")
 
 
 def ask_ai(provider: str) -> str:

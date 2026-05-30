@@ -25,6 +25,8 @@ GOOGLE_MAPS_API_KEY = "your-google-maps-platform-key"
 
 Browser geolocation uses `streamlit-js-eval`. If the browser denies permission, RoadSoS falls back to IP geolocation and then to manual coordinates. The resolved location is reused across pages for the active Streamlit session; use **Detect Location Again** in the sidebar to request a fresh fix.
 
+Every page exposes a **Global SOS** call control. RoadSoS resolves country-specific ambulance, police, fire, and unified dispatch numbers for its curated country table, guarantees the EU `112` route across EU member states, and clearly labels `112` as a GSM-mobile fallback when a detected country does not have a curated national route yet. The offline rider QR packet carries the resolved SOS contacts.
+
 Nearby services use OpenStreetMap Overpass data with a 24-hour runtime cache. Add a server-side `GOOGLE_MAPS_API_KEY` with Places API (New) access to enrich live trauma-centre, hospital, police, fire, ambulance, towing, puncture-shop, repair, and showroom contacts. The **Refresh Live Data** action bypasses the runtime cache, while expired cached contacts remain available as an offline fallback if live providers fail. TomTom can add live traffic flow and incidents. Emergency contact cards render before the optional 3D road-intelligence layer; enable that layer on demand when road topology, weather, and traffic context are needed. Rider medical profile data remains session-scoped on hosted Streamlit deployments.
 
 For production Google Places enrichment, enable Places API (New), store the key only in Streamlit secrets, restrict the key to Places API (New), and add server IP restrictions when the deployment has stable outbound IP addresses.
