@@ -101,8 +101,8 @@ SECTION_META = {
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def cached_services(lat: float, lon: float, radius_m: int, _google_maps_api_key: str | None) -> dict:
-    return fetch_nearby_services(lat, lon, radius_m, _google_maps_api_key)
+def cached_services(lat: float, lon: float, radius_m: int, _google_maps_api_key: str | None, country_code: str = "XX") -> dict:
+    return fetch_nearby_services(lat, lon, radius_m, _google_maps_api_key, country_code=country_code)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -329,11 +329,12 @@ with st.spinner("Finding nearby services..."):
         lon = round(float(st.session_state.lon), 3)
         radius_m = radius_km * 1000
         google_maps_api_key = get_secret("GOOGLE_MAPS_API_KEY")
+        country_code = str(st.session_state.get("country_code", "XX"))
         force_service_refresh = bool(st.session_state.pop("_force_service_refresh", False))
         services = (
-            fetch_nearby_services(lat, lon, radius_m, google_maps_api_key, force_refresh=True)
+            fetch_nearby_services(lat, lon, radius_m, google_maps_api_key, force_refresh=True, country_code=country_code)
             if force_service_refresh
-            else cached_services(lat, lon, radius_m, google_maps_api_key)
+            else cached_services(lat, lon, radius_m, google_maps_api_key, country_code)
         )
         service_error = None
     except Exception as exc:
@@ -383,6 +384,16 @@ if service_meta.get("source") == "stale_cache":
     st.warning(
         f"Live service providers are unavailable. Showing offline cached contacts from "
         f"{float(service_meta.get('age_hours') or 0):.1f} hours ago."
+    )
+elif service_meta.get("source") == "emergency_numbers_fallback":
+    st.warning(
+        "Map data could not be loaded and no offline cache exists. Showing hardcoded emergency "
+        "numbers for your country — call them directly for dispatch to your location."
+    )
+if service_meta.get("auto_expanded_to_m"):
+    expanded_km = int(service_meta["auto_expanded_to_m"]) // 1000
+    st.info(
+        f"Sparse results at {radius_km} km — automatically expanded search to {expanded_km} km to find more contacts."
     )
 
 if not get_secret("GOOGLE_MAPS_API_KEY"):

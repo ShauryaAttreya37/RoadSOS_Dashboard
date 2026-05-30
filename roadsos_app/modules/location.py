@@ -4,6 +4,7 @@ import requests
 import streamlit as st
 
 from roadsos_app.modules.emergency_numbers import get_global_sos_profile
+from roadsos_app.modules.location_store import load_last_location, save_last_location
 from roadsos_app.modules.ui import global_sos_card, location_pill
 
 
@@ -144,6 +145,19 @@ def init_location_state() -> None:
         _store_location(lat, lon, country_code, city, country_name, "IP")
         return
 
+    # Fall back to last known location persisted from a previous session.
+    saved = load_last_location()
+    if saved is not None:
+        _store_location(
+            saved["lat"],
+            saved["lon"],
+            saved.get("country_code", "XX"),
+            saved.get("city", "Last known location"),
+            saved.get("country_name", "Unknown"),
+            "Offline (last known)",
+        )
+        return
+
     st.session_state.location_error = error or "Unable to detect location."
     st.session_state._location_detection_complete = True
 
@@ -218,6 +232,12 @@ def _store_location(
     st.session_state.location_source = source
     st.session_state.location_error = None
     st.session_state._location_detection_complete = True
+    # Persist so the next offline session still has a location.
+    if source != "Offline (last known)":
+        try:
+            save_last_location(float(lat), float(lon), country_code, city, country_name, source)
+        except Exception:
+            pass
 
 
 def _valid_coordinates(lat: object, lon: object) -> bool:

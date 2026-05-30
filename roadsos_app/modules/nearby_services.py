@@ -13,6 +13,10 @@ OVERPASS_URLS = (
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.openstreetmap.ru/api/interpreter",
 )
+
+# When map data is sparse, auto-expand up to this radius before giving up.
+_AUTO_EXPAND_MAX_M = 25_000
+_SPARSE_THRESHOLD = 3  # total contacts across police + hospital + ambulance
 HTTP_TIMEOUT_SECONDS = (4, 25)
 GOOGLE_PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 GOOGLE_PLACES_MAX_PAGES = 3
@@ -137,6 +141,7 @@ def fetch_nearby_services(
     google_maps_api_key: str | None = None,
     *,
     force_refresh: bool = False,
+    country_code: str = "XX",
 ) -> dict[str, list[dict[str, Any]]]:
     provider = "google" if google_maps_api_key else "osm"
     key = f"{CACHE_SCHEMA_VERSION}_{provider}_{lat:.3f}_{lon:.3f}_{radius_m}"
@@ -158,22 +163,23 @@ def fetch_nearby_services(
     try:
         payload = _fetch_overpass_json(query, headers)
     except RuntimeError as exc:
-        if stale_cached is None:
-            raise
-        _ensure_schema(stale_cached)
-        meta = dict(stale_cached.get("_meta") or {})
-        warnings = list(meta.get("warnings") or [])
-        warnings.append(f"Live lookup failed; showing offline cache: {exc}")
-        meta.update(
-            {
-                "source": "stale_cache",
-                "age_hours": cache_age_hours(key),
-                "cache_key": key,
-                "warnings": warnings,
-            }
-        )
-        stale_cached["_meta"] = meta
-        return stale_cached
+        if stale_cached is not None:
+            _ensure_schema(stale_cached)
+            meta = dict(stale_cached.get("_meta") or {})
+            warnings = list(meta.get("warnings") or [])
+            warnings.append(f"Live lookup failed; showing offline cache: {exc}")
+            meta.update(
+                {
+                    "source": "stale_cache",
+                    "age_hours": cache_age_hours(key),
+                    "cache_key": key,
+                    "warnings": warnings,
+                }
+            )
+            stale_cached["_meta"] = meta
+            return stale_cached
+        # No cache at all — synthesise contacts from hardcoded emergency numbers.
+        return _emergency_number_contacts(lat, lon, country_code, str(exc))
 
     services: dict[str, list[dict[str, Any]]] = {category: [] for category in OVERPASS_TAGS}
     seen: set[tuple[str, str, int]] = set()
@@ -217,7 +223,8 @@ def fetch_nearby_services(
 
     _dedupe_services(services)
     for category in services:
-        services[category].sort(key=lambda item: item.get("distance_km") if item.get("distance_km") is not None else float("inf"))
+        if category != "_meta":
+            services[category].sort(key=lambda item: item.get("distance_km") if item.get("distance_km") is not None else float("inf"))
 
     services["_meta"] = {
         "source": "live",
@@ -226,7 +233,62 @@ def fetch_nearby_services(
         "provider": "OpenStreetMap + Google Places" if google_maps_api_key else "OpenStreetMap",
         "warnings": places_errors,
     }
+
+    # Auto-expand: if critical categories are sparse, retry silently at 2× radius.
+    critical_count = sum(len(services.get(c, [])) for c in ("police", "hospital", "ambulance"))
+    if critical_count < _SPARSE_THRESHOLD and radius_m < _AUTO_EXPAND_MAX_M:
+        expanded_m = min(radius_m * 2, _AUTO_EXPAND_MAX_M)
+        try:
+            expanded = fetch_nearby_services(
+                lat, lon, expanded_m, google_maps_api_key,
+                force_refresh=False, country_code=country_code,
+            )
+            for cat in OVERPASS_TAGS:
+                existing_ids = {_service_identity(item) for item in services.get(cat, [])}
+                for item in expanded.get(cat, []):
+                    if _service_identity(item) not in existing_ids:
+                        services[cat].append(item)
+            for cat in OVERPASS_TAGS:
+                services[cat].sort(key=lambda item: item.get("distance_km") if item.get("distance_km") is not None else float("inf"))
+            services["_meta"]["auto_expanded_to_m"] = expanded_m
+        except Exception:
+            pass
+
     save_cache(key, services)
+    return services
+
+
+def _emergency_number_contacts(
+    lat: float, lon: float, country_code: str, error_note: str
+) -> dict[str, list[dict[str, Any]]]:
+    """Return hardcoded emergency-number contacts when no map data is available at all."""
+    from roadsos_app.modules.emergency_numbers import get_emergency_numbers
+    numbers = get_emergency_numbers(country_code)
+    services: dict[str, list[dict[str, Any]]] = {category: [] for category in OVERPASS_TAGS}
+
+    def _contact(name: str, number: str, category: str) -> dict[str, Any]:
+        return {
+            "name": name,
+            "category": category,
+            "lat": lat,
+            "lon": lon,
+            "distance_km": None,
+            "eta_min": None,
+            "phone": number,
+            "address": "Call directly — no map data available",
+            "source": "Emergency Numbers (offline fallback)",
+        }
+
+    services["police"] = [_contact(f"Police — call {numbers['police']}", numbers["police"], "Police")]
+    services["ambulance"] = [_contact(f"Ambulance — call {numbers['ambulance']}", numbers["ambulance"], "Ambulance")]
+    services["hospital"] = [_contact(f"Emergency services — call {numbers['unified']}", numbers["unified"], "Hospital")]
+    services["_meta"] = {
+        "source": "emergency_numbers_fallback",
+        "age_hours": 0.0,
+        "cache_key": "",
+        "provider": "Hardcoded emergency numbers",
+        "warnings": [f"Map data unavailable: {error_note}. Showing dial-only emergency contacts."],
+    }
     return services
 
 
