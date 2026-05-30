@@ -148,6 +148,119 @@ def render_section(tab, category: str, services_dict: dict) -> None:
                 service_card(**svc)
 
 
+def render_road_intelligence(lat: float, lon: float, radius_m: int, services: dict) -> None:
+    st.markdown("---")
+    st.subheader("3D Road Vicinity Intelligence")
+    st.caption(
+        "Optional operational view of verified nearby road topology, current weather exposure, and live traffic signals. "
+        "Emergency contacts above stay available while this heavier layer is loaded."
+    )
+    if not st.toggle(
+        "Load live 3D road intelligence",
+        key="road_intelligence_enabled",
+        help="Loads OpenStreetMap road topology, current Open-Meteo conditions, and optional TomTom traffic.",
+    ):
+        placeholder_card("Emergency contacts are ready. Enable the live 3D layer when road and traffic context is needed.")
+        return
+
+    map_view_mode = st.radio(
+        "Map view",
+        ["Road Map", "3D Operations"],
+        horizontal=True,
+        help="Use Road Map for navigation clarity or 3D Operations for elevated traffic and incident signals.",
+    )
+
+    road_radius_m = min(radius_m, MAX_ROAD_RADIUS_M)
+    tomtom_key = get_secret("TOMTOM_API_KEY")
+    road_error = None
+    weather_error = None
+    traffic_error = None
+
+    with st.spinner("Loading verified road topology and live vicinity signals..."):
+        try:
+            roads = cached_road_network(lat, lon, road_radius_m)
+        except Exception as exc:
+            roads = []
+            road_error = str(exc)
+        try:
+            weather = cached_weather_advisory(lat, lon)
+        except Exception as exc:
+            weather = None
+            weather_error = str(exc)
+        try:
+            traffic = cached_live_traffic(lat, lon, road_radius_m, tomtom_key)
+        except Exception as exc:
+            traffic = {
+                "configured": bool(tomtom_key),
+                "source": "TomTom Traffic unavailable",
+                "flows": [],
+                "incidents": [],
+                "updated_at": None,
+                "errors": [str(exc)],
+            }
+            traffic_error = str(exc)
+
+    summary = traffic_summary(traffic)
+    rm1, rm2, rm3, rm4, rm5 = st.columns(5)
+    with rm1:
+        stat_card("Road Segments", len(roads), "OSM verified", "#8B949E")
+    with rm2:
+        stat_card("Live Flow Samples", summary["flows"], "TomTom", GREEN if summary["flows"] else "#8B949E")
+    with rm3:
+        stat_card("Congested", summary["congested"], "segments", AMBER if summary["congested"] else GREEN)
+    with rm4:
+        stat_card("Incidents", summary["incidents"], "live", RED if summary["incidents"] else GREEN)
+    with rm5:
+        stat_card("Closures", summary["closures"], "live", RED if summary["closures"] else GREEN)
+
+    if weather:
+        risk_color = RED if weather["risk"] == "HIGH" else AMBER if weather["risk"] == "ELEVATED" else GREEN
+        st.markdown(
+            f"""
+<div style="background:{c["CARD_BG"]};border:1px solid {risk_color}44;border-left:4px solid {risk_color};
+     border-radius:6px;padding:1rem 1.2rem;margin:1rem 0;color:{c["TEXT"]};font-family:'Inter';">
+    <b style="color:{risk_color};">WEATHER-DERIVED ROAD ADVISORY: {weather["risk"]}</b>
+    <span style="color:{c["MUTED"]};"> &nbsp; {weather["advisory"]}</span><br>
+    <span style="font-size:0.8rem;color:{c["MUTED"]};">
+        Open-Meteo observation {html.escape(weather["observed_at"])} &nbsp; | &nbsp;
+        {weather["temperature_c"]:.1f} C &nbsp; | &nbsp;
+        precipitation {weather["precipitation_mm"]:.1f} mm &nbsp; | &nbsp;
+        wind {weather["wind_kmh"]:.1f} km/h
+    </span>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+    elif weather_error:
+        st.warning(f"Current weather advisory is unavailable: {weather_error}")
+
+    if road_error:
+        st.warning(f"Road topology is unavailable: {road_error}")
+
+    st.pydeck_chart(
+        build_road_state_deck(lat, lon, roads, traffic, map_view_mode, services=services),
+        width="stretch",
+        height=610,
+        key=f"roadsos-map-v4-{lat:.3f}-{lon:.3f}",
+    )
+
+    if not traffic["configured"]:
+        st.info(
+            "Live traffic flow and incident towers are ready but disabled until TOMTOM_API_KEY is added. "
+            "The visible road network is real OpenStreetMap topology and the advisory uses current Open-Meteo observations."
+        )
+    elif traffic_error or traffic.get("errors"):
+        st.warning("Some TomTom live traffic requests could not be completed. Available live signals are shown.")
+    else:
+        st.caption(f"TomTom live traffic refreshed at {traffic['updated_at']} UTC.")
+
+    st.caption(
+        "Map legend: basemap roads = CARTO with OpenStreetMap data; green/amber/red elevated corridors = TomTom live flow; "
+        "red towers = TomTom incidents; blue marker = rider GPS. Use 3D Operations to inspect elevated live signals. "
+        "Radar radius is capped at 5 km for fast refreshes."
+    )
+
+
 with st.sidebar:
     st.header("Search Controls")
     radius_km = st.slider("Search radius", 1, 20, 5, format="%d km")
@@ -249,106 +362,6 @@ else:
         st.warning("Some Google Places enrichment requests could not be completed. Available verified results are shown.")
 
 st.markdown("---")
-st.subheader("3D Road Vicinity Intelligence")
-st.caption(
-    "Operational view of verified nearby road topology, current weather exposure, and live traffic signals. "
-    "Weather exposure is an advisory, not a pavement inspection."
-)
-map_view_mode = st.radio(
-    "Map view",
-    ["Road Map", "3D Operations"],
-    horizontal=True,
-    help="Use Road Map for navigation clarity or 3D Operations for elevated traffic and incident signals.",
-)
-
-road_radius_m = min(radius_m, MAX_ROAD_RADIUS_M)
-tomtom_key = get_secret("TOMTOM_API_KEY")
-road_error = None
-weather_error = None
-traffic_error = None
-
-with st.spinner("Loading verified road topology and live vicinity signals..."):
-    try:
-        roads = cached_road_network(lat, lon, road_radius_m)
-    except Exception as exc:
-        roads = []
-        road_error = str(exc)
-    try:
-        weather = cached_weather_advisory(lat, lon)
-    except Exception as exc:
-        weather = None
-        weather_error = str(exc)
-    try:
-        traffic = cached_live_traffic(lat, lon, road_radius_m, tomtom_key)
-    except Exception as exc:
-        traffic = {
-            "configured": bool(tomtom_key),
-            "source": "TomTom Traffic unavailable",
-            "flows": [],
-            "incidents": [],
-            "updated_at": None,
-            "errors": [str(exc)],
-        }
-        traffic_error = str(exc)
-
-summary = traffic_summary(traffic)
-rm1, rm2, rm3, rm4, rm5 = st.columns(5)
-with rm1:
-    stat_card("Road Segments", len(roads), "OSM verified", "#8B949E")
-with rm2:
-    stat_card("Live Flow Samples", summary["flows"], "TomTom", GREEN if summary["flows"] else "#8B949E")
-with rm3:
-    stat_card("Congested", summary["congested"], "segments", AMBER if summary["congested"] else GREEN)
-with rm4:
-    stat_card("Incidents", summary["incidents"], "live", RED if summary["incidents"] else GREEN)
-with rm5:
-    stat_card("Closures", summary["closures"], "live", RED if summary["closures"] else GREEN)
-
-if weather:
-    risk_color = RED if weather["risk"] == "HIGH" else AMBER if weather["risk"] == "ELEVATED" else GREEN
-    st.markdown(
-        f"""
-<div style="background:{c["CARD_BG"]};border:1px solid {risk_color}44;border-left:4px solid {risk_color};
-     border-radius:6px;padding:1rem 1.2rem;margin:1rem 0;color:{c["TEXT"]};font-family:'Inter';">
-    <b style="color:{risk_color};">WEATHER-DERIVED ROAD ADVISORY: {weather["risk"]}</b>
-    <span style="color:{c["MUTED"]};"> &nbsp; {weather["advisory"]}</span><br>
-    <span style="font-size:0.8rem;color:{c["MUTED"]};">
-        Open-Meteo observation {html.escape(weather["observed_at"])} &nbsp; | &nbsp;
-        {weather["temperature_c"]:.1f} C &nbsp; | &nbsp;
-        precipitation {weather["precipitation_mm"]:.1f} mm &nbsp; | &nbsp;
-        wind {weather["wind_kmh"]:.1f} km/h
-    </span>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-elif weather_error:
-    st.warning(f"Current weather advisory is unavailable: {weather_error}")
-
-st.pydeck_chart(
-    build_road_state_deck(lat, lon, roads, traffic, map_view_mode, services=services),
-    width="stretch",
-    height=610,
-    key=f"roadsos-map-v4-{lat:.3f}-{lon:.3f}",
-)
-
-if not traffic["configured"]:
-    st.info(
-        "Live traffic flow and incident towers are ready but disabled until TOMTOM_API_KEY is added. "
-        "The visible road network is real OpenStreetMap topology and the advisory uses current Open-Meteo observations."
-    )
-elif traffic_error or traffic.get("errors"):
-    st.warning("Some TomTom live traffic requests could not be completed. Available live signals are shown.")
-else:
-    st.caption(f"TomTom live traffic refreshed at {traffic['updated_at']} UTC.")
-
-st.caption(
-    "Map legend: basemap roads = CARTO with OpenStreetMap data; green/amber/red elevated corridors = TomTom live flow; "
-    "red towers = TomTom incidents; blue marker = rider GPS. Use 3D Operations to inspect elevated live signals. "
-    "Radar radius is capped at 5 km for fast refreshes."
-)
-
-st.markdown("---")
 st.subheader("Nearby Emergency Contacts")
 
 tab_labels = [
@@ -363,6 +376,8 @@ tabs = st.tabs(tab_labels)
 
 for tab, category in zip(tabs, category_order):
     render_section(tab, category, services)
+
+render_road_intelligence(lat, lon, radius_m, services)
 
 st.markdown("---")
 st.caption(

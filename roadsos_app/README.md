@@ -23,9 +23,9 @@ TOMTOM_API_KEY = "your-tomtom-traffic-api-key"
 GOOGLE_MAPS_API_KEY = "your-google-maps-platform-key"
 ```
 
-Browser geolocation uses `streamlit-js-eval`. If the browser denies permission, RoadSoS falls back to IP geolocation and then to manual coordinates.
+Browser geolocation uses `streamlit-js-eval`. If the browser denies permission, RoadSoS falls back to IP geolocation and then to manual coordinates. The resolved location is reused across pages for the active Streamlit session; use **Detect Location Again** in the sidebar to request a fresh fix.
 
-Nearby services use OpenStreetMap Overpass data with a 24-hour runtime cache. Google Maps can enrich the service list, and TomTom can add live traffic flow and incidents. Rider medical profile data remains session-scoped on hosted Streamlit deployments.
+Nearby services use OpenStreetMap Overpass data with a 24-hour runtime cache. Google Maps can enrich the service list, and TomTom can add live traffic flow and incidents. Emergency contact cards render before the optional 3D road-intelligence layer; enable that layer on demand when road topology, weather, and traffic context are needed. Rider medical profile data remains session-scoped on hosted Streamlit deployments.
 
 ## Model Notebook
 

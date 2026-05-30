@@ -9,6 +9,18 @@ from roadsos_app.modules.ui import location_pill
 IPAPI_URL = "https://ipapi.co/json/"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 HTTP_TIMEOUT_SECONDS = 3
+REVERSE_GEOCODE_PRECISION = 4
+
+_LOCATION_DEFAULTS = {
+    "lat": None,
+    "lon": None,
+    "country_code": "XX",
+    "city": "Location unavailable",
+    "country_name": "Unknown",
+    "location_source": "Unavailable",
+    "location_error": None,
+    "_location_detection_complete": False,
+}
 
 _SESSION = requests.Session()
 _SESSION.headers.update(
@@ -64,11 +76,18 @@ def get_ip_location() -> tuple[float | None, float | None, str, str, str, str | 
         return None, None, "XX", "Location unavailable", "Unknown", str(exc)
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
 def reverse_geocode(lat: float, lon: float) -> tuple[str, str, str]:
     if not _valid_coordinates(lat, lon):
         return "XX", "Detected GPS fix", "Unknown"
 
+    return _reverse_geocode_cached(
+        round(float(lat), REVERSE_GEOCODE_PRECISION),
+        round(float(lon), REVERSE_GEOCODE_PRECISION),
+    )
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _reverse_geocode_cached(lat: float, lon: float) -> tuple[str, str, str]:
     try:
         response = _SESSION.get(
             NOMINATIM_URL,
@@ -100,43 +119,32 @@ def reverse_geocode(lat: float, lon: float) -> tuple[str, str, str]:
 
 
 def init_location_state() -> None:
-    st.session_state.setdefault("lat", None)
-    st.session_state.setdefault("lon", None)
-    st.session_state.setdefault("country_code", "XX")
-    st.session_state.setdefault("city", "Location unavailable")
-    st.session_state.setdefault("country_name", "Unknown")
-    st.session_state.setdefault("location_source", "Unavailable")
-    st.session_state.setdefault("location_error", None)
+    for key, value in _LOCATION_DEFAULTS.items():
+        st.session_state.setdefault(key, value)
+
+    if st.session_state.get("_location_detection_complete"):
+        return
+    if has_location():
+        st.session_state._location_detection_complete = True
+        return
 
     browser_lat, browser_lon = get_browser_location()
     if (
         browser_lat is not None
         and browser_lon is not None
         and _valid_coordinates(browser_lat, browser_lon)
-        and st.session_state.get("location_source") != "Manual"
     ):
-        st.session_state.lat = browser_lat
-        st.session_state.lon = browser_lon
         country_code, city, country_name = reverse_geocode(browser_lat, browser_lon)
-        st.session_state.country_code = country_code
-        st.session_state.city = city
-        st.session_state.country_name = country_name
-        st.session_state.location_source = "Browser"
-        st.session_state.location_error = None
+        _store_location(browser_lat, browser_lon, country_code, city, country_name, "Browser")
         return
 
-    if not has_location() and st.session_state.get("location_source") != "Manual":
-        lat, lon, country_code, city, country_name, error = get_ip_location()
-        if lat is not None and lon is not None:
-            st.session_state.lat = lat
-            st.session_state.lon = lon
-            st.session_state.country_code = country_code
-            st.session_state.city = city
-            st.session_state.country_name = country_name
-            st.session_state.location_source = "IP"
-            st.session_state.location_error = None
-        else:
-            st.session_state.location_error = error or "Unable to detect location."
+    lat, lon, country_code, city, country_name, error = get_ip_location()
+    if lat is not None and lon is not None:
+        _store_location(lat, lon, country_code, city, country_name, "IP")
+        return
+
+    st.session_state.location_error = error or "Unable to detect location."
+    st.session_state._location_detection_complete = True
 
 
 def has_location() -> bool:
@@ -167,14 +175,43 @@ def render_location_sidebar() -> None:
             if not _valid_coordinates(lat, lon):
                 st.error("Enter valid latitude and longitude values before applying.")
                 return
-            st.session_state.lat = lat
-            st.session_state.lon = lon
-            st.session_state.country_code = country_code or "XX"
-            st.session_state.city = city or "Manual location"
-            st.session_state.country_name = country_name or "Unknown"
-            st.session_state.location_source = "Manual"
-            st.session_state.location_error = None
+            _store_location(
+                lat,
+                lon,
+                country_code or "XX",
+                city or "Manual location",
+                country_name or "Unknown",
+                "Manual",
+            )
             st.rerun()
+        if st.button("Detect Location Again", width="stretch"):
+            reset_location_detection(clear_ip_cache=True)
+            st.rerun()
+
+
+def reset_location_detection(*, clear_ip_cache: bool = False) -> None:
+    for key, value in _LOCATION_DEFAULTS.items():
+        st.session_state[key] = value
+    if clear_ip_cache:
+        get_ip_location.clear()
+
+
+def _store_location(
+    lat: float,
+    lon: float,
+    country_code: str,
+    city: str,
+    country_name: str,
+    source: str,
+) -> None:
+    st.session_state.lat = float(lat)
+    st.session_state.lon = float(lon)
+    st.session_state.country_code = country_code
+    st.session_state.city = city
+    st.session_state.country_name = country_name
+    st.session_state.location_source = source
+    st.session_state.location_error = None
+    st.session_state._location_detection_complete = True
 
 
 def _valid_coordinates(lat: object, lon: object) -> bool:

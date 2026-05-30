@@ -1,5 +1,6 @@
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import requests
@@ -274,35 +275,29 @@ def _enrich_from_google_places(
             "places.nationalPhoneNumber,places.googleMapsUri,places.primaryType"
         ),
     }
-    for category, (text_query, included_type) in GOOGLE_PLACES_SEARCHES.items():
-        body: dict[str, Any] = {
-            "textQuery": text_query,
-            "pageSize": 20,
-            "locationBias": {
-                "circle": {
-                    "center": {"latitude": lat, "longitude": lon},
-                    "radius": float(min(radius_m, 50_000)),
-                }
-            },
+    payloads = []
+    with ThreadPoolExecutor(max_workers=len(GOOGLE_PLACES_SEARCHES)) as executor:
+        futures = {
+            executor.submit(
+                _fetch_google_places_payload,
+                category,
+                text_query,
+                included_type,
+                lat,
+                lon,
+                radius_m,
+                headers,
+            ): category
+            for category, (text_query, included_type) in GOOGLE_PLACES_SEARCHES.items()
         }
-        if category in {"ambulance", "vehicle_rescue"}:
-            body["includePureServiceAreaBusinesses"] = True
-        if included_type:
-            body["includedType"] = included_type
-            body["strictTypeFiltering"] = True
-        try:
-            response = _SESSION.post(
-                GOOGLE_PLACES_TEXT_SEARCH_URL,
-                json=body,
-                headers=headers,
-                timeout=HTTP_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except requests.RequestException as exc:
-            errors.append(f"{category}: {exc}")
-            continue
+        for future in as_completed(futures):
+            category = futures[future]
+            try:
+                payloads.append((category, future.result()))
+            except (requests.RequestException, ValueError) as exc:
+                errors.append(f"{category}: {exc}")
 
+    for category, payload in payloads:
         for place in payload.get("places", []):
             location = place.get("location") or {}
             place_lat = location.get("latitude")
@@ -328,6 +323,44 @@ def _enrich_from_google_places(
                 }
             )
     return errors
+
+
+def _fetch_google_places_payload(
+    category: str,
+    text_query: str,
+    included_type: str | None,
+    lat: float,
+    lon: float,
+    radius_m: int,
+    headers: dict[str, str],
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "textQuery": text_query,
+        "pageSize": 20,
+        "locationBias": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lon},
+                "radius": float(min(radius_m, 50_000)),
+            }
+        },
+    }
+    if category in {"ambulance", "vehicle_rescue"}:
+        body["includePureServiceAreaBusinesses"] = True
+    if included_type:
+        body["includedType"] = included_type
+        body["strictTypeFiltering"] = True
+
+    response = requests.post(
+        GOOGLE_PLACES_TEXT_SEARCH_URL,
+        json=body,
+        headers=headers,
+        timeout=HTTP_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Google Places returned an invalid response.")
+    return payload
 
 
 def _dedupe_services(services: dict[str, list[dict[str, Any]]]) -> None:
