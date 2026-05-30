@@ -9,6 +9,7 @@ from roadsos_app.modules.ui import global_sos_card, location_pill
 
 
 IPAPI_BASE_URL = "https://ipapi.co"
+IPWHO_BASE_URL = "https://ipwho.is"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 HTTP_TIMEOUT_SECONDS = 3
 REVERSE_GEOCODE_PRECISION = 4
@@ -72,17 +73,20 @@ def _client_ip() -> str | None:
 def get_ip_location(client_ip: str | None = None) -> tuple[float | None, float | None, str, str, str, str | None]:
     # Use specific-IP endpoint when we know the client's IP; avoids geolocating
     # the cloud server's IP (e.g. The Dalles, Oregon) instead of the user's.
+    errors: list[str] = []
+
+    # Primary: ipapi.co
     url = f"{IPAPI_BASE_URL}/{client_ip}/json/" if client_ip else f"{IPAPI_BASE_URL}/json/"
     try:
         response = _SESSION.get(url, timeout=HTTP_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         if data.get("error"):
-            raise ValueError(data.get("reason", "ipapi returned error"))
+            raise ValueError(data.get("reason", "ipapi error"))
         lat = float(data["latitude"])
         lon = float(data["longitude"])
         if not _valid_coordinates(lat, lon):
-            raise ValueError("IP geolocation returned invalid coordinates.")
+            raise ValueError("invalid coordinates")
         return (
             lat,
             lon,
@@ -92,7 +96,31 @@ def get_ip_location(client_ip: str | None = None) -> tuple[float | None, float |
             None,
         )
     except Exception as exc:
-        return None, None, "XX", "Location unavailable", "Unknown", str(exc)
+        errors.append(f"ipapi.co: {exc}")
+
+    # Fallback: ipwho.is (no rate-limit on free tier for reasonable usage)
+    fallback_url = f"{IPWHO_BASE_URL}/{client_ip}" if client_ip else IPWHO_BASE_URL
+    try:
+        response = _SESSION.get(fallback_url, timeout=HTTP_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("success", True) is False:
+            lat = float(data["latitude"])
+            lon = float(data["longitude"])
+            if not _valid_coordinates(lat, lon):
+                raise ValueError("invalid coordinates")
+            return (
+                lat,
+                lon,
+                (data.get("country_code") or "XX").upper(),
+                data.get("city", "") or "Detected city",
+                data.get("country", "") or "Detected country",
+                None,
+            )
+    except Exception as exc:
+        errors.append(f"ipwho.is: {exc}")
+
+    return None, None, "XX", "Location unavailable", "Unknown", "; ".join(errors)
 
 
 def reverse_geocode(lat: float, lon: float) -> tuple[str, str, str]:
@@ -171,7 +199,7 @@ def init_location_state() -> None:
             saved.get("country_code", "XX"),
             saved.get("city", "Last known location"),
             saved.get("country_name", "Unknown"),
-            "Offline (last known)",
+            "Cached location",
         )
         return
 
@@ -250,7 +278,7 @@ def _store_location(
     st.session_state.location_error = None
     st.session_state._location_detection_complete = True
     # Persist so the next offline session still has a location.
-    if source != "Offline (last known)":
+    if source != "Cached location":
         try:
             save_last_location(float(lat), float(lon), country_code, city, country_name, source)
         except Exception:
