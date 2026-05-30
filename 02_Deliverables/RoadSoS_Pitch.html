@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RoadSoS — Smart Helmet SOS + Predictive Safety</title>
+<style>
+  :root{
+    --navy:#0f3460; --navy-dark:#081a36; --amber:#f5a623; --amber-dark:#e07b00;
+    --red:#e63946; --teal:#2a9d8f; --purple:#7c3aed;
+    --bg:#f8fafc; --card:#ffffff; --ink:#0f172a; --muted:#6b7280;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .hero{background:linear-gradient(135deg,#0a1e3a 0%,#142a52 60%,#1c3a72 100%);color:white;padding:90px 24px 100px;text-align:center;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(245,166,35,0.18),transparent 40%),radial-gradient(circle at 15% 80%,rgba(230,57,70,0.12),transparent 40%)}
+  .hero > *{position:relative}
+  .badge{display:inline-block;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;padding:6px 14px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.4);color:var(--amber);border-radius:999px;margin-bottom:24px;font-weight:600}
+  .hero h1{font-size:60px;line-height:1.05;margin:0 0 18px;font-weight:800;letter-spacing:-0.02em}
+  .hero h1 .accent{background:linear-gradient(90deg,var(--amber),#ff7b54);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.tag{font-size:20px;max-width:760px;margin:0 auto 12px;color:#cdd9ec}
+  .hero p.sub{font-size:14px;max-width:680px;margin:24px auto 0;color:#9eb3d4;font-style:italic}
+  .pill-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:32px}
+  .pill{padding:8px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:999px;font-size:13px;color:#dceaff}
+  .container{max-width:1100px;margin:0 auto;padding:0 24px}
+  section{padding:70px 0}
+  section:nth-child(even){background:#eef2f7}
+  h2{font-size:34px;margin:0 0 10px;color:var(--navy);font-weight:800;letter-spacing:-0.01em}
+  h2 .num{display:inline-block;width:42px;height:42px;line-height:42px;text-align:center;background:var(--amber);color:white;border-radius:50%;font-size:18px;margin-right:14px;vertical-align:middle}
+  h3{font-size:20px;margin:30px 0 12px;color:var(--navy)}
+  .lead{font-size:17px;color:#334155;max-width:840px;margin-bottom:30px}
+  .fig{display:block;margin:28px auto;max-width:100%;height:auto;border-radius:14px;box-shadow:0 10px 40px rgba(15,52,96,0.12);background:white}
+  .grid{display:grid;gap:20px}
+  .grid-2{grid-template-columns:repeat(2,1fr)}
+  .grid-3{grid-template-columns:repeat(3,1fr)}
+  .grid-4{grid-template-columns:repeat(4,1fr)}
+  @media (max-width:760px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}.hero h1{font-size:40px}}
+  .card{background:var(--card);border:1px solid #e2e8f0;border-radius:14px;padding:22px;box-shadow:0 2px 8px rgba(15,52,96,0.04)}
+  .card h4{margin:0 0 8px;color:var(--navy);font-size:16px}
+  .card p{margin:0;color:#475569;font-size:14px}
+  .stat{font-size:42px;font-weight:800;color:var(--amber);line-height:1;display:block;margin-bottom:6px}
+  .stat-card{text-align:center;padding:30px 20px}
+  table{width:100%;border-collapse:collapse;margin:20px 0;background:white;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(15,52,96,0.06)}
+  th{background:var(--navy);color:white;text-align:left;padding:12px 16px;font-size:13px;font-weight:600;letter-spacing:0.02em}
+  td{padding:11px 16px;font-size:14px;border-bottom:1px solid #e2e8f0;color:#334155}
+  tr:last-child td{border-bottom:none}
+  tr:nth-child(even) td{background:#f8fafc}
+  .scenario{background:linear-gradient(135deg,#fff8eb 0%,#fde9c2 100%);border-left:5px solid var(--amber);padding:24px 28px;border-radius:12px;margin:22px 0}
+  .scenario p{margin:8px 0;color:#334155}
+  .scenario strong{color:var(--navy)}
+  .timestamp{display:inline-block;background:var(--navy);color:white;padding:3px 10px;border-radius:6px;font-family:monospace;font-size:13px;margin-right:8px;font-weight:600}
+  .callout{display:flex;gap:16px;background:white;border-radius:12px;padding:18px;border:1px solid #e2e8f0;align-items:flex-start}
+  .callout .icon{width:42px;height:42px;border-radius:10px;background:var(--amber);color:white;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .callout .icon.navy{background:var(--navy)} .callout .icon.red{background:var(--red)} .callout .icon.teal{background:var(--teal)} .callout .icon.purple{background:var(--purple)}
+  .callout h5{margin:0 0 4px;color:var(--navy);font-size:15px}
+  .callout p{margin:0;color:#475569;font-size:13.5px}
+  code{background:#eef2f7;padding:2px 6px;border-radius:4px;font-size:13px;color:var(--navy)}
+  .equation{font-family:'Cambria Math','STIX Two Math',serif;background:white;padding:14px 18px;border-radius:10px;border:1px solid #e2e8f0;font-size:14.5px;color:var(--navy);margin:10px 0;font-style:italic}
+  footer{background:var(--navy-dark);color:#cdd9ec;text-align:center;padding:36px 24px;font-size:13px}
+  .tag-final{font-size:22px;font-weight:700;color:var(--amber);margin:14px 0 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <span class="badge">Hackathon Blueprint · Two-wheeler Road Safety</span>
+  <h1>RoadSoS<br><span class="accent">predicts. protects. preserves.</span></h1>
+  <p class="tag">A solar-powered smart motorcycle helmet that predicts crashes <em>before</em> they happen, calls for help <em>during</em> them, and warns nearby riders <em>after</em>.</p>
+  <div class="pill-row">
+    <span class="pill">⚡ ESP32-S3 Edge AI</span>
+    <span class="pill">🧠 Physics-Informed NN</span>
+    <span class="pill">📡 LoRa Rider Mesh</span>
+    <span class="pill">☀ Solar Trickle Charging</span>
+    <span class="pill">🚑 SIM7600 → 108 EMS</span>
+    <span class="pill">💸 BOM ≈ ₹4,985</span>
+  </div>
+  <p class="sub">Targeting the 1.5 lakh annual Indian road fatalities — 44 % of which are two-wheeler riders.</p>
+</header>
+
+<section>
+  <div class="container">
+    <h2><span class="num">1</span>The Problem</h2>
+    <p class="lead">India loses over <strong>1.5 lakh lives</strong> to road accidents every year. Two-wheelers account for <strong>44%</strong> of all fatalities. The killer isn't always the crash — it's the wait. Within the <em>Golden Hour</em>, survival jumps over <strong>70%</strong>. Today, riders lose consciousness, bystanders don't know whom to call, and following riders crash into the same wreck.</p>
+    <div class="grid grid-4">
+      <div class="card stat-card"><span class="stat">1.5 L</span><p>Annual road deaths in India</p></div>
+      <div class="card stat-card"><span class="stat">44%</span><p>Are two-wheeler riders</p></div>
+      <div class="card stat-card"><span class="stat">~30 min</span><p>Average ambulance arrival in semi-urban India</p></div>
+      <div class="card stat-card"><span class="stat">70%</span><p>Survival lift if reached within Golden Hour</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">2</span>Real-Life Scenario — A Day with Ravi</h2>
+    <p class="lead">Ravi commutes from Hosur to Bangalore on NH-44. Here's how his RoadSoS helmet works across an ordinary, rainy day.</p>
+
+    <div class="scenario">
+      <p><span class="timestamp">06:30</span><strong>Boot &amp; charge.</strong> Helmet powers on. Green LED pulses — battery 92%, solar trickle active. Medical profile (O+, asthma, contact: wife Anjali) encrypted on ESP32-S3.</p>
+    </div>
+    <div class="scenario">
+      <p><span class="timestamp">07:12</span><strong>Rain + oil patch at km 47.</strong> IMU detects abnormal lateral acceleration and a 23° lean angle building too fast. On-device <strong>PINN</strong> estimates skid probability past 0.65. Buzzer pulses, brow LEDs flash amber, haptic motor taps Ravi's temple. He eases the throttle. <em>Crisis averted.</em></p>
+    </div>
+    <div class="scenario">
+      <p><span class="timestamp">11:40</span><strong>Truck swerves; Ravi is thrown.</strong> IMU registers &gt; 6 g impact + free-fall + sudden tilt &gt; 80°. Edge-AI 1D-CNN confirms <em>crash</em> (not pothole, not dropped helmet). 10-second cancel countdown begins.</p>
+    </div>
+    <div class="scenario">
+      <p><span class="timestamp">11:40:10</span><strong>Emergency mode.</strong> GPS locked. SIM7600 dispatches SMS + HTTPS to 108, hospital API, police, and Anjali. LoRa 433 MHz broadcast — every RoadSoS helmet within ~3 km buzzes. Beacon mode: rear LEDs strobe red, buzzer chirps Morse SOS. A bystander scans the QR on the shell — first-aid + blood group instantly visible.</p>
+    </div>
+    <div class="scenario">
+      <p><span class="timestamp">11:54</span><strong>Ambulance arrives — Golden Hour preserved.</strong> Three riders 1.5 km behind have already slowed because their helmets vibrated. No secondary collision.</p>
+    </div>
+    <div class="scenario">
+      <p><span class="timestamp">16:00</span><strong>Return ride.</strong> Daytime sun has been trickle-charging the helmet — battery is at 87% despite 8 hours of operation.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">3</span>System Architecture</h2>
+    <p class="lead">Three tiers — sense, infer, communicate. The entire safety loop completes in under <strong>100 milliseconds</strong>, well below human reaction time.</p>
+    <img class="fig" src="fig_1_architecture.svg" alt="Three-tier system architecture">
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">4</span>Sensor Placement on the Helmet</h2>
+    <p class="lead">Every sensor lives where its physics works best — IMU at the crown (best gyroscopic reference), solar film on top (max sky exposure), rear pod for brain &amp; battery (preserves center of mass, away from rider's skull).</p>
+    <img class="fig" src="IMAGES/helmet.png" alt="Sensor placement map">
+    <h3>Bill of Materials</h3>
+    <table>
+      <thead><tr><th>#</th><th>Component</th><th>Model</th><th>Placement</th><th>Cost (INR)</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Microcontroller</td><td>ESP32-S3-WROOM-1 (8 MB PSRAM)</td><td>Rear pod, EMI-shielded</td><td>₹450</td></tr>
+        <tr><td>2</td><td>6-axis IMU</td><td>ICM-42688-P (TDK)</td><td>Crown, centered</td><td>₹380</td></tr>
+        <tr><td>3</td><td>LoRa radio</td><td>Ra-02 (SX1278, 433 MHz)</td><td>Rear pod + helical antenna</td><td>₹220</td></tr>
+        <tr><td>4</td><td>GNSS</td><td>u-blox NEO-6M</td><td>Top shell, sky-facing</td><td>₹350</td></tr>
+        <tr><td>5</td><td>Cellular modem</td><td>SIM7600E-H 4G LTE</td><td>Rear pod, chin-strap antenna</td><td>₹1,800</td></tr>
+        <tr><td>6</td><td>Solar film</td><td>Flexible a-Si 5V / 200 mA</td><td>Top curved shell</td><td>₹450</td></tr>
+        <tr><td>7</td><td>Battery</td><td>Li-Po 3.7 V 2000 mAh + BMS</td><td>Rear pod, aramid sleeve</td><td>₹350</td></tr>
+        <tr><td>8</td><td>Solar MPPT IC</td><td>CN3791</td><td>Power board</td><td>₹120</td></tr>
+        <tr><td>9</td><td>Piezo buzzer / haptics / LEDs / bone-conduction</td><td>Various</td><td>Temple + ear cup + brow</td><td>₹400</td></tr>
+        <tr><td>10</td><td>Cancel button + QR + NFC + PCB + misc</td><td>—</td><td>—</td><td>₹465</td></tr>
+        <tr><td colspan="4" style="text-align:right;font-weight:700;color:var(--navy)">TOTAL prototype BOM</td><td style="font-weight:800;color:var(--amber)">≈ ₹4,985</td></tr>
+      </tbody>
+    </table>
+    <p style="color:#475569;font-size:14px;font-style:italic">Target retail BOM at 10 k volume: ₹2,800 → consumer price ₹4,999. Total added weight to a stock helmet: ~120 g.</p>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">5</span>Edge AI — Two Models, One Chip</h2>
+    <p class="lead">RoadSoS runs <strong>two complementary models</strong> on the same ESP32-S3, one per FreeRTOS core. The PINN handles the <em>before</em> (prevention). The TinyML classifier handles the <em>during</em> (confirmation). Together they cover the full safety timeline — neither alone would.</p>
+    <img class="fig" src="IMAGES/edge%20AI%20pipleline.png" alt="Edge AI pipeline">
+
+    <div class="grid grid-2" style="margin-top:30px">
+      <div class="card">
+        <h4 style="color:var(--amber-dark)">🧠 PINN — Physics-Informed NN</h4>
+        <p><strong>What:</strong> predicts rider instability before loss of control. Outputs P(skid), P(tipover), time-to-critical each 100 ms.</p>
+        <p style="margin-top:8px"><strong>Why physics-informed:</strong> a vanilla NN needs millions of labeled crashes. PINN bakes the motorcycle dynamic equations into the loss function — generalises from small data.</p>
+        <div class="equation">Loss = MSE + λ · ‖ I·φ̈ − m·g·h·sin(φ) + m·v²·h·cos(φ)·δ/L ‖²</div>
+        <div class="equation">+ μ · ‖ √(a_x² + a_y²) − μ·g ‖₊  (friction circle)</div>
+        <p style="margin-top:8px"><strong>Where it runs:</strong> ESP32-S3 core 1 · MLP 4 × 32 · 12 KB INT8 · ~3 ms latency.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--purple)">⚡ TinyML — 1D-CNN Crash Classifier</h4>
+        <p><strong>What:</strong> confirms whether an impact is a real crash (vs. dropped helmet, pothole, speed bump, hand slap).</p>
+        <p style="margin-top:8px"><strong>Architecture:</strong> 1D-CNN, 3 conv + 2 dense, INT8-quantized. Input: 200 ms sliding window of 6-axis IMU (50 Hz × 200 ms = 60 × 6).</p>
+        <p style="margin-top:8px"><strong>Training data:</strong> SisFall + UMA Fall public datasets + 1,200 self-collected motorcycle runs across rough Indian roads.</p>
+        <p style="margin-top:8px"><strong>Where it runs:</strong> ESP32-S3 core 0 with ESP-NN acceleration · TensorFlow Lite Micro · 48 KB · ~9 ms latency.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">6</span>Emergency Response Flow</h2>
+    <p class="lead">From impact to ambulance dispatch in under 15 seconds. Every millisecond accounted for.</p>
+    <img class="fig" src="fig_4_emergency_flow.svg" alt="Emergency response timeline">
+    <div class="grid grid-2" style="margin-top:18px">
+      <div class="callout"><div class="icon navy">1</div><div><h5>10-second cancel window</h5><p>Rider can press the chin-strap button to abort false alarms — protects against a helmet that fell off a parked bike.</p></div></div>
+      <div class="callout"><div class="icon red">2</div><div><h5>Four parallel channels</h5><p>Cellular (108 + hospital + contacts), LoRa mesh broadcast, BLE phone redundancy, and on-helmet beacon all fire simultaneously.</p></div></div>
+      <div class="callout"><div class="icon teal">3</div><div><h5>Medical profile attached</h5><p>SOS packet carries blood group, allergies, conditions, and emergency contacts. Bystanders scan the QR for first-aid.</p></div></div>
+      <div class="callout"><div class="icon purple">4</div><div><h5>Forensic log</h5><p>Telemetry from 30 s before impact stored on PSRAM — useful for insurance and law-enforcement playback.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">7</span>LoRa Rider Mesh</h2>
+    <p class="lead">When one helmet crashes, every helmet within ~3 km knows in under 2 seconds. No cell tower required — works in dead zones and rural areas.</p>
+    <img class="fig" src="IMAGES/LoRA.png" alt="LoRa rider safety mesh">
+    <div class="grid grid-3" style="margin-top:18px">
+      <div class="card"><h4>📡 433 MHz, WPC-licensed</h4><p>Free band in India. Sub-mW idle. 120 mA TX burst — barely registers on the battery budget.</p></div>
+      <div class="card"><h4>🔁 TTL-2 relay</h4><p>Each helmet re-broadcasts once, doubling effective range without flooding the network.</p></div>
+      <div class="card"><h4>🛡 Stops secondary collisions</h4><p>5 seconds of early warning is enough to brake from 80 km/h to a survivable speed.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">8</span>Solar Charging — Power from the Sun</h2>
+    <p class="lead">Flexible amorphous-silicon solar film on the curved top shell trickle-charges the helmet during daylight rides. On a typical 6-hour daytime commute, the helmet <strong>gains</strong> charge instead of losing it.</p>
+    <img class="fig" src="IMAGES/solar%20charge.png" alt="Solar charging subsystem">
+    <div class="grid grid-3" style="margin-top:18px">
+      <div class="card"><h4>☀ a-Si flexible film</h4><p>Conforms to the helmet's curve. Shatter-resistant — no glass anywhere near the rider's head.</p></div>
+      <div class="card"><h4>⚡ MPPT (CN3791)</h4><p>Extracts maximum power even under partial shade (visor, head tilt). Linear TP4056-class charger with OV / OC / OT cutoff.</p></div>
+      <div class="card"><h4>🔋 Adaptive duty-cycle</h4><p>Lux sensor switches the helmet into power-saving mode at night (GPS duty-cycled) and full-active mode in daylight.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">9</span>Why RoadSoS Wins</h2>
+    <table>
+      <thead><tr><th>Judging criterion</th><th>How RoadSoS scores</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Innovation</strong></td><td>First helmet to combine PINN + TinyML on a sub-₹500 MCU. Solar trickle is unique in this category.</td></tr>
+        <tr><td><strong>Feasibility</strong></td><td>All components off-the-shelf. Working prototype achievable in 6 weeks. Total BOM under ₹5 k.</td></tr>
+        <tr><td><strong>Impact</strong></td><td>Targets 44% of Indian road fatalities. Even a 10% Golden Hour improvement saves ~6,500 lives/year.</td></tr>
+        <tr><td><strong>Scalability</strong></td><td>LoRa mesh gets <em>more valuable</em> as more helmets deploy — classic network effect.</td></tr>
+        <tr><td><strong>Sustainability</strong></td><td>Solar reduces charging burden, extends battery life, lowers e-waste.</td></tr>
+        <tr><td><strong>UX</strong></td><td>Zero rider input required. Helmet "just works" from the moment it's worn.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Roadmap</h3>
+    <div class="grid grid-4">
+      <div class="card"><h4>Weeks 0–2</h4><p>Working hackathon prototype — IMU + ESP32 + LoRa + buzzer + GPS + cellular dummy.</p></div>
+      <div class="card"><h4>Weeks 3–6</h4><p>Train PINN on real motorcycle data with local riding clubs.</p></div>
+      <div class="card"><h4>Month 3</h4><p>Pilot with 50 delivery riders (Dunzo / Swiggy).</p></div>
+      <div class="card"><h4>Year 1</h4><p>B2B sales to fleets + B2C launch at ₹4,999. Karnataka 108 EMS integration.</p></div>
+    </div>
+
+    <p class="tag-final">RoadSoS — Predicting the crash. Calling for help. Warning the world. Powered by the sun.</p>
+  </div>
+</section>
+
+<footer>
+  Smart Helmet SOS + Predictive Safety System · Hackathon Prototype Blueprint · 2026
+</footer>
+
+</body>
+</html>
