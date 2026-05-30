@@ -34,3 +34,7 @@ GOOGLE_MAPS_API_KEY = "your-google-maps-platform-key"
 OpenStreetMap powers nearby-service discovery without a paid key. Google Maps enriches service coverage, TomTom enables live traffic overlays, and either OpenRouter or Anthropic enables hosted AI responses.
 
 The hosted app keeps rider medical data in the active Streamlit session only. Runtime logs, caches, local profiles, and secrets are excluded from version control.
+
+## Model Notebook
+
+The PINN architecture notebook is included at `roadsos_app/notebooks/RoadSoS_PINN_Model.ipynb`.

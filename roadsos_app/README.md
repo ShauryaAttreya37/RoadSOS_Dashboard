@@ -26,3 +26,7 @@ GOOGLE_MAPS_API_KEY = "your-google-maps-platform-key"
 Browser geolocation uses `streamlit-js-eval`. If the browser denies permission, RoadSoS falls back to IP geolocation and then to manual coordinates.
 
 Nearby services use OpenStreetMap Overpass data with a 24-hour runtime cache. Google Maps can enrich the service list, and TomTom can add live traffic flow and incidents. Rider medical profile data remains session-scoped on hosted Streamlit deployments.
+
+## Model Notebook
+
+The model notebook is available at `notebooks/RoadSoS_PINN_Model.ipynb`. It documents the 6-axis IMU PINN architecture, physical constraints, skid probability, and injury metrics.
