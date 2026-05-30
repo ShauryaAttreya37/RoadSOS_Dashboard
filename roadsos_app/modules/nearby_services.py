@@ -15,13 +15,18 @@ OVERPASS_URLS = (
 )
 HTTP_TIMEOUT_SECONDS = (4, 25)
 GOOGLE_PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+GOOGLE_PLACES_MAX_PAGES = 3
 
 # Bump when the query/category schema changes so stale on-disk caches are ignored.
-CACHE_SCHEMA_VERSION = "v4"
+CACHE_SCHEMA_VERSION = "v5"
 
 _SESSION = requests.Session()
 
 OVERPASS_TAGS = {
+    "trauma_centre": [
+        ("healthcare:speciality", "trauma"),
+        ("emergency", "trauma_centre"),
+    ],
     "hospital": [
         ("amenity", "hospital"),
         ("amenity", "clinic"),
@@ -58,11 +63,15 @@ OVERPASS_TAGS = {
         ("shop", "car_repair"),
         ("shop", "motorcycle_repair"),
         ("craft", "car_repair"),
+    ],
+    "showroom": [
         ("shop", "car"),
+        ("shop", "motorcycle"),
     ],
 }
 
 NAME_PATTERNS = {
+    "trauma_centre": re.compile(r"\b(trauma|emergency room|emergency department|casualty)\b", re.IGNORECASE),
     "ambulance": re.compile(r"\b(ambulance|ems|paramedic)\b", re.IGNORECASE),
     "vehicle_rescue": re.compile(
         r"\b(tow|towing|roadside assistance|breakdown recovery|vehicle recovery)\b",
@@ -72,15 +81,18 @@ NAME_PATTERNS = {
         r"\b(puncture|puncher|tyres?|tires?|auto garage|car garage|bike repair|motorcycle repair|car repair)\b",
         re.IGNORECASE,
     ),
+    "showroom": re.compile(r"\b(showroom|car dealer|motorcycle dealer|bike dealer)\b", re.IGNORECASE),
 }
 
 GOOGLE_PLACES_SEARCHES = {
+    "trauma_centre": ("trauma center emergency hospital", "hospital"),
     "hospital": ("hospital emergency room", "hospital"),
     "police": ("police station", "police"),
     "fire_station": ("fire station", "fire_station"),
     "ambulance": ("ambulance service", None),
     "vehicle_rescue": ("towing service roadside assistance", None),
     "puncture_shop": ("puncture repair tyre shop", None),
+    "showroom": ("vehicle showroom car motorcycle dealer", None),
 }
 
 SERVICE_QUERIES = {
@@ -123,24 +135,45 @@ def fetch_nearby_services(
     lon: float,
     radius_m: int = 5000,
     google_maps_api_key: str | None = None,
+    *,
+    force_refresh: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     provider = "google" if google_maps_api_key else "osm"
     key = f"{CACHE_SCHEMA_VERSION}_{provider}_{lat:.3f}_{lon:.3f}_{radius_m}"
     cached = load_cache(key)
-    if cached is not None:
+    if cached is not None and not force_refresh:
         _ensure_schema(cached)
         meta = dict(cached.get("_meta") or {})
         meta.update({"source": "cache", "age_hours": cache_age_hours(key), "cache_key": key})
         cached["_meta"] = meta
         return cached
 
+    stale_cached = load_cache(key, allow_expired=True)
     query = build_overpass_query(lat, lon, radius_m)
     headers = {
         "User-Agent": "RoadSoS/1.0 Emergency Dashboard (hackathon project)",
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "application/json",
     }
-    payload = _fetch_overpass_json(query, headers)
+    try:
+        payload = _fetch_overpass_json(query, headers)
+    except RuntimeError as exc:
+        if stale_cached is None:
+            raise
+        _ensure_schema(stale_cached)
+        meta = dict(stale_cached.get("_meta") or {})
+        warnings = list(meta.get("warnings") or [])
+        warnings.append(f"Live lookup failed; showing offline cache: {exc}")
+        meta.update(
+            {
+                "source": "stale_cache",
+                "age_hours": cache_age_hours(key),
+                "cache_key": key,
+                "warnings": warnings,
+            }
+        )
+        stale_cached["_meta"] = meta
+        return stale_cached
 
     services: dict[str, list[dict[str, Any]]] = {category: [] for category in OVERPASS_TAGS}
     seen: set[tuple[str, str, int]] = set()
@@ -151,31 +184,31 @@ def fetch_nearby_services(
             continue
 
         tags = element.get("tags", {})
-        category = _category_for_tags(tags)
-        if category is None:
+        categories = _categories_for_tags(tags)
+        if not categories:
             continue
 
         item_id = int(element.get("id", 0))
-        dedupe_key = (str(element.get("type", "")), category, item_id)
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-
         distance = round(haversine(lat, lon, item_lat, item_lon), 2)
-        services[category].append(
-            {
-                "name": _tag(tags, "name", "operator", "brand") or _fallback_name(category),
-                "category": category.replace("_", " ").title(),
-                "lat": item_lat,
-                "lon": item_lon,
-                "distance_km": distance,
-                "eta_min": eta_minutes(distance),
-                "phone": _tag(tags, "phone", "contact:phone", "mobile", "contact:mobile") or "Not listed",
-                "address": _address(tags),
-                "emergency": tags.get("emergency"),
-                "source": "OpenStreetMap",
-            }
-        )
+        for category in categories:
+            dedupe_key = (str(element.get("type", "")), category, item_id)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            services[category].append(
+                {
+                    "name": _tag(tags, "name", "operator", "brand") or _fallback_name(category),
+                    "category": category.replace("_", " ").title(),
+                    "lat": item_lat,
+                    "lon": item_lon,
+                    "distance_km": distance,
+                    "eta_min": eta_minutes(distance),
+                    "phone": _tag(tags, "phone", "contact:phone", "mobile", "contact:mobile") or "Not listed",
+                    "address": _address(tags),
+                    "emergency": tags.get("emergency"),
+                    "source": "OpenStreetMap",
+                }
+            )
 
     _add_emergency_hospital_fallbacks(services)
     places_errors = []
@@ -184,7 +217,7 @@ def fetch_nearby_services(
 
     _dedupe_services(services)
     for category in services:
-        services[category].sort(key=lambda item: item["distance_km"])
+        services[category].sort(key=lambda item: item.get("distance_km") if item.get("distance_km") is not None else float("inf"))
 
     services["_meta"] = {
         "source": "live",
@@ -203,14 +236,24 @@ def _fetch_overpass_json(query: str, headers: dict[str, str]) -> dict[str, Any]:
         try:
             response = _SESSION.post(url, data={"data": query}, headers=headers, timeout=HTTP_TIMEOUT_SECONDS)
             response.raise_for_status()
-            return response.json()
-        except requests.RequestException as exc:
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("Overpass returned an invalid response.")
+            return payload
+        except (requests.RequestException, ValueError) as exc:
             errors.append(f"{url}: {exc}")
     raise RuntimeError("All Overpass endpoints failed. " + " | ".join(errors))
 
 
 def count_total_contacts(services: dict[str, list[dict[str, Any]]]) -> int:
-    return sum(len(value) for key, value in services.items() if key != "_meta")
+    return len(
+        {
+            _service_identity(item)
+            for category, items in services.items()
+            if category != "_meta"
+            for item in items
+        }
+    )
 
 
 def _ensure_schema(services: dict[str, Any]) -> None:
@@ -229,24 +272,29 @@ def _element_coordinates(element: dict[str, Any]) -> tuple[float | None, float |
     return None, None
 
 
-def _category_for_tags(tags: dict[str, str]) -> str | None:
+def _categories_for_tags(tags: dict[str, str]) -> list[str]:
+    categories = []
     for category, category_tags in OVERPASS_TAGS.items():
         if any(tags.get(key) == value for key, value in category_tags):
-            return category
+            categories.append(category)
     searchable = " ".join(
         str(tags.get(name, ""))
         for name in ("name", "brand", "operator", "description")
     )
     for category, pattern in NAME_PATTERNS.items():
-        if pattern.search(searchable):
-            return category
-    return None
+        if category not in categories and pattern.search(searchable):
+            categories.append(category)
+    if "hospital" in categories and (
+        tags.get("emergency") == "yes" or NAME_PATTERNS["trauma_centre"].search(searchable)
+    ) and "trauma_centre" not in categories:
+        categories.append("trauma_centre")
+    return categories
 
 
 def _add_emergency_hospital_fallbacks(services: dict[str, list[dict[str, Any]]]) -> None:
     if services["ambulance"]:
         return
-    for hospital in services["hospital"]:
+    for hospital in [*services["trauma_centre"], *services["hospital"]]:
         if hospital.get("emergency") != "yes":
             continue
         services["ambulance"].append(
@@ -271,7 +319,7 @@ def _enrich_from_google_places(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
         "X-Goog-FieldMask": (
-            "places.id,places.displayName,places.formattedAddress,places.location,"
+            "places.id,places.displayName,places.formattedAddress,places.location,nextPageToken,"
             "places.nationalPhoneNumber,places.googleMapsUri,places.primaryType"
         ),
     }
@@ -303,19 +351,22 @@ def _enrich_from_google_places(
             place_lat = location.get("latitude")
             place_lon = location.get("longitude")
             if place_lat is None or place_lon is None:
-                continue
-            distance = round(haversine(lat, lon, float(place_lat), float(place_lon)), 2)
-            if distance > radius_m / 1000:
-                continue
+                if category not in {"ambulance", "vehicle_rescue", "puncture_shop"}:
+                    continue
+                distance = None
+            else:
+                distance = round(haversine(lat, lon, float(place_lat), float(place_lon)), 2)
+                if distance > radius_m / 1000:
+                    continue
             display_name = place.get("displayName") or {}
             services[category].append(
                 {
                     "name": display_name.get("text") or category.replace("_", " ").title(),
                     "category": category.replace("_", " ").title(),
-                    "lat": float(place_lat),
-                    "lon": float(place_lon),
+                    "lat": float(place_lat) if place_lat is not None else None,
+                    "lon": float(place_lon) if place_lon is not None else None,
                     "distance_km": distance,
-                    "eta_min": eta_minutes(distance),
+                    "eta_min": eta_minutes(distance) if distance is not None else None,
                     "phone": place.get("nationalPhoneNumber") or "Not listed",
                     "address": place.get("formattedAddress") or "Not listed",
                     "maps_url": place.get("googleMapsUri"),
@@ -337,6 +388,7 @@ def _fetch_google_places_payload(
     body: dict[str, Any] = {
         "textQuery": text_query,
         "pageSize": 20,
+        "rankPreference": "DISTANCE",
         "locationBias": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lon},
@@ -344,23 +396,30 @@ def _fetch_google_places_payload(
             }
         },
     }
-    if category in {"ambulance", "vehicle_rescue"}:
+    if category in {"ambulance", "vehicle_rescue", "puncture_shop"}:
         body["includePureServiceAreaBusinesses"] = True
     if included_type:
         body["includedType"] = included_type
         body["strictTypeFiltering"] = True
 
-    response = requests.post(
-        GOOGLE_PLACES_TEXT_SEARCH_URL,
-        json=body,
-        headers=headers,
-        timeout=HTTP_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise ValueError("Google Places returned an invalid response.")
-    return payload
+    places = []
+    for _ in range(GOOGLE_PLACES_MAX_PAGES):
+        response = requests.post(
+            GOOGLE_PLACES_TEXT_SEARCH_URL,
+            json=body,
+            headers=headers,
+            timeout=HTTP_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Google Places returned an invalid response.")
+        places.extend(payload.get("places") or [])
+        page_token = payload.get("nextPageToken")
+        if not page_token:
+            break
+        body["pageToken"] = page_token
+    return {"places": places}
 
 
 def _dedupe_services(services: dict[str, list[dict[str, Any]]]) -> None:
@@ -369,16 +428,22 @@ def _dedupe_services(services: dict[str, list[dict[str, Any]]]) -> None:
             continue
         unique = {}
         for item in items:
-            name = re.sub(r"\W+", "", str(item.get("name", "")).lower())
-            identity = (
-                name,
-                round(float(item.get("lat", 0)), 4),
-                round(float(item.get("lon", 0)), 4),
-            )
+            identity = _service_identity(item)
             existing = unique.get(identity)
             if existing is None or existing.get("source") != "Google Places":
                 unique[identity] = item
         services[category] = list(unique.values())
+
+
+def _service_identity(item: dict[str, Any]) -> tuple[str, float | None, float | None]:
+    name = re.sub(r"\W+", "", str(item.get("name", "")).lower())
+    lat = item.get("lat")
+    lon = item.get("lon")
+    return (
+        name,
+        round(float(lat), 4) if lat is not None else None,
+        round(float(lon), 4) if lon is not None else None,
+    )
 
 
 def _tag(tags: dict[str, str], *names: str) -> str | None:

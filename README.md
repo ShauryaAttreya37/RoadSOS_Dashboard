@@ -31,7 +31,7 @@ TOMTOM_API_KEY = "your-tomtom-traffic-api-key"
 GOOGLE_MAPS_API_KEY = "your-google-maps-platform-key"
 ```
 
-OpenStreetMap powers nearby-service discovery without a paid key. Google Maps enriches service coverage, TomTom enables live traffic overlays, and either OpenRouter or Anthropic enables hosted AI responses.
+OpenStreetMap powers nearby-service discovery without a paid key. A server-side Google Maps Platform key with Places API (New) access enriches live trauma-centre, ambulance, towing, repair, and showroom coverage. TomTom enables live traffic overlays, and either OpenRouter or Anthropic enables hosted AI responses.
 
 The hosted app keeps rider medical data in the active Streamlit session only. Runtime logs, caches, local profiles, and secrets are excluded from version control.
 

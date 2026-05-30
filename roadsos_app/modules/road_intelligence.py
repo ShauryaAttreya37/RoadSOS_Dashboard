@@ -177,12 +177,14 @@ def fetch_live_traffic(
 
 
 SERVICE_PIN_COLORS: dict[str, list[int]] = {
+    "trauma_centre":  [255, 82, 82, 245],
     "hospital":       [229, 57, 53, 230],
     "police":         [79, 195, 247, 230],
     "fire_station":   [255, 110, 64, 230],
     "ambulance":      [255, 143, 0, 230],
     "vehicle_rescue": [118, 185, 0, 230],
     "puncture_shop":  [149, 117, 205, 230],
+    "showroom":       [38, 198, 218, 230],
 }
 
 

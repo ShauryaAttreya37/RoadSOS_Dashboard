@@ -49,6 +49,12 @@ is_dark = get_theme() == "dark"
 
 
 SECTION_META = {
+    "trauma_centre": {
+        "icon": "emergency",
+        "title": "Trauma Centres",
+        "desc": "Emergency-capable hospitals and mapped trauma centres for time-critical crash care.",
+        "empty": "No trauma centre is mapped within this radius. Check nearby hospitals and call the local ambulance number shown above.",
+    },
     "hospital": {
         "icon": "local_hospital",
         "title": "Hospitals & Clinics",
@@ -59,19 +65,19 @@ SECTION_META = {
         "icon": "local_police",
         "title": "Police Stations",
         "desc": "Nearest police stations for accident reporting and legal assistance.",
-        "empty": "No police stations found. Call 100 (India) directly.",
+        "empty": "No police stations found. Call the local police emergency number shown above.",
     },
     "fire_station": {
         "icon": "local_fire_department",
         "title": "Fire & Rescue",
         "desc": "Fire brigade and rescue stations for extrication and fire response.",
-        "empty": "No fire stations found. Call 101 (India) directly.",
+        "empty": "No fire stations found. Call the local fire emergency number shown above.",
     },
     "ambulance": {
         "icon": "emergency",
         "title": "Ambulance & Emergency Dispatch",
         "desc": "Mapped ambulance points and emergency-hospital dispatch fallbacks. Call to confirm availability.",
-        "empty": "No ambulance or emergency dispatch points found. Call 108 (India) directly.",
+        "empty": "No ambulance or emergency dispatch points found. Call the local ambulance number shown above.",
     },
     "vehicle_rescue": {
         "icon": "directions_car",
@@ -81,9 +87,15 @@ SECTION_META = {
     },
     "puncture_shop": {
         "icon": "build",
-        "title": "Puncture Shops & Showrooms",
-        "desc": "Tyre repair shops and authorised service centres.",
+        "title": "Puncture & Repair Shops",
+        "desc": "Tyre repair shops, garages, and vehicle repair centres.",
         "empty": "No repair shops found nearby.",
+    },
+    "showroom": {
+        "icon": "storefront",
+        "title": "Vehicle Showrooms",
+        "desc": "Mapped car and motorcycle showrooms for vehicle support and recovery coordination.",
+        "empty": "No vehicle showrooms found nearby.",
     },
 }
 
@@ -143,7 +155,9 @@ def render_section(tab, category: str, services_dict: dict) -> None:
 
         cols = st.columns(3)
         for idx, svc in enumerate(items):
-            svc = {**svc, "eta_min": svc.get("eta_min") or eta_minutes(float(svc.get("distance_km", 0)))}
+            distance = svc.get("distance_km")
+            eta_min = svc.get("eta_min") or (eta_minutes(float(distance)) if distance is not None else None)
+            svc = {**svc, "eta_min": eta_min}
             with cols[idx % 3]:
                 service_card(**svc)
 
@@ -277,6 +291,7 @@ with st.sidebar:
         st.markdown(":material/public: **Live fetch**")
 
     if st.button("Refresh Live Data", type="primary", use_container_width=True):
+        st.session_state["_force_service_refresh"] = True
         cached_services.clear()
         cached_road_network.clear()
         cached_weather_advisory.clear()
@@ -314,10 +329,15 @@ with st.spinner("Finding nearby services..."):
         lon = round(float(st.session_state.lon), 3)
         radius_m = radius_km * 1000
         google_maps_api_key = get_secret("GOOGLE_MAPS_API_KEY")
-        services = cached_services(lat, lon, radius_m, google_maps_api_key)
+        force_service_refresh = bool(st.session_state.pop("_force_service_refresh", False))
+        services = (
+            fetch_nearby_services(lat, lon, radius_m, google_maps_api_key, force_refresh=True)
+            if force_service_refresh
+            else cached_services(lat, lon, radius_m, google_maps_api_key)
+        )
         service_error = None
     except Exception as exc:
-        services = {"hospital": [], "police": [], "fire_station": [], "ambulance": [], "vehicle_rescue": [], "puncture_shop": []}
+        services = {category: [] for category in SECTION_META}
         service_error = str(exc)
 
 if service_error:
@@ -331,24 +351,39 @@ if service_error:
         unsafe_allow_html=True,
     )
 
-category_order = ["hospital", "police", "fire_station", "ambulance", "vehicle_rescue", "puncture_shop"]
+category_order = list(SECTION_META)
 counts = {cat: len(services.get(cat, [])) for cat in category_order}
 total = count_total_contacts(services)
-service_provider = str((services.get("_meta") or {}).get("provider", "OpenStreetMap"))
+service_meta = dict(services.get("_meta") or {})
+service_provider = str(service_meta.get("provider", "OpenStreetMap"))
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
-    stat_card("Total Services", total, "found", c["TEXT"])
+    stat_card("Unique Contacts", total, "found", c["TEXT"])
 with c2:
-    stat_card("Hospitals", counts["hospital"], "nearby", RED)
+    stat_card("Trauma Centres", counts["trauma_centre"], "nearby", RED)
 with c3:
-    stat_card("Police", counts["police"], "nearby", "#4FC3F7")
+    stat_card("Hospitals", counts["hospital"], "nearby", RED)
 with c4:
-    stat_card("Fire & Rescue", counts["fire_station"], "nearby", "#FF6E40")
+    stat_card("Police", counts["police"], "nearby", "#4FC3F7")
 with c5:
     stat_card("Ambulance", counts["ambulance"], "nearby", AMBER)
-with c6:
-    stat_card("Repair", counts["puncture_shop"] + counts["vehicle_rescue"], "nearby", GREEN)
+
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    stat_card("Fire & Rescue", counts["fire_station"], "nearby", "#FF6E40")
+with c2:
+    stat_card("Towing", counts["vehicle_rescue"], "nearby", GREEN)
+with c3:
+    stat_card("Puncture & Repair", counts["puncture_shop"], "nearby", GREEN)
+with c4:
+    stat_card("Showrooms", counts["showroom"], "nearby", GREEN)
+
+if service_meta.get("source") == "stale_cache":
+    st.warning(
+        f"Live service providers are unavailable. Showing offline cached contacts from "
+        f"{float(service_meta.get('age_hours') or 0):.1f} hours ago."
+    )
 
 if not get_secret("GOOGLE_MAPS_API_KEY"):
     st.info(
@@ -357,7 +392,7 @@ if not get_secret("GOOGLE_MAPS_API_KEY"):
     )
 else:
     st.caption(f"Nearby service provider coverage: {service_provider}.")
-    service_warnings = list((services.get("_meta") or {}).get("warnings") or [])
+    service_warnings = list(service_meta.get("warnings") or [])
     if service_warnings:
         st.warning("Some Google Places enrichment requests could not be completed. Available verified results are shown.")
 
@@ -365,12 +400,14 @@ st.markdown("---")
 st.subheader("Nearby Emergency Contacts")
 
 tab_labels = [
+    f":material/emergency: Trauma Centres ({counts['trauma_centre']})",
     f":material/local_hospital: Hospitals ({counts['hospital']})",
     f":material/local_police: Police ({counts['police']})",
     f":material/local_fire_department: Fire & Rescue ({counts['fire_station']})",
     f":material/emergency: Ambulance ({counts['ambulance']})",
     f":material/directions_car: Towing ({counts['vehicle_rescue']})",
     f":material/build: Repair ({counts['puncture_shop']})",
+    f":material/storefront: Showrooms ({counts['showroom']})",
 ]
 tabs = st.tabs(tab_labels)
 

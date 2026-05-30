@@ -14,7 +14,7 @@ def cache_path(key: str) -> Path:
     return CACHE_DIR / f"{safe_key}.json"
 
 
-def load_cache(key: str) -> dict[str, Any] | None:
+def load_cache(key: str, *, allow_expired: bool = False) -> dict[str, Any] | None:
     path = cache_path(key)
     if not path.exists():
         return None
@@ -25,7 +25,7 @@ def load_cache(key: str) -> dict[str, Any] | None:
         return None
 
     timestamp = float(payload.get("timestamp", 0))
-    if time.time() - timestamp > CACHE_TTL_SECONDS:
+    if not allow_expired and time.time() - timestamp > CACHE_TTL_SECONDS:
         return None
 
     data = payload.get("data")
@@ -34,7 +34,13 @@ def load_cache(key: str) -> dict[str, Any] | None:
 
 def save_cache(key: str, data: dict[str, Any]) -> None:
     payload = {"timestamp": time.time(), "data": data}
-    cache_path(key).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    path = cache_path(key)
+    temporary_path = path.with_suffix(f".{time.time_ns()}.tmp")
+    try:
+        temporary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def is_cache_fresh(key: str) -> bool:
@@ -62,4 +68,3 @@ def clear_cache() -> int:
         path.unlink(missing_ok=True)
         removed += 1
     return removed
-
