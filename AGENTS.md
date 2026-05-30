@@ -1,1 +1,0 @@
-give all the plots in dark mode

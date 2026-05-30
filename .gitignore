@@ -22,3 +22,27 @@
 .obsidian/
 .DS_Store
 Thumbs.db
+
+# Local hackathon workspace files; deploy only the canonical Streamlit dashboard
+/00_Project_Overview/
+/01_Hardware/
+/02_Deliverables/
+/03_Scripts/
+/Dashboard/
+/IMAGES/
+/SmartHelmetSOS/
+/sample_dashboard/
+/AGENTS.md
+/CLAUDE.md
+/Plots.md
+/TODO.md
+/codebase_check.md
+/gen_doc.js
+/gen_doc2.js
+/image.png
+/preview.png
+/preview2.png
+/Pasted image *.png
+/RoadSoS_Submission_2.docx
+/SmartHelmetSOS_Documentation.docx
+/roadsos_app/update_documentation.py
