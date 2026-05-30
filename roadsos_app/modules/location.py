@@ -10,6 +10,8 @@ from roadsos_app.modules.ui import global_sos_card, location_pill
 
 IPAPI_BASE_URL = "https://ipapi.co"
 IPWHO_BASE_URL = "https://ipwho.is"
+# Known cloud/CDN data-center cities that appear when server IP is geolocated instead of client IP.
+_DATACENTER_CITIES = frozenset({"the dalles", "council bluffs", "ashburn", "boydton", "des moines"})
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 HTTP_TIMEOUT_SECONDS = 3
 REVERSE_GEOCODE_PRECISION = 4
@@ -87,11 +89,14 @@ def get_ip_location(client_ip: str | None = None) -> tuple[float | None, float |
         lon = float(data["longitude"])
         if not _valid_coordinates(lat, lon):
             raise ValueError("invalid coordinates")
+        city = data.get("city", "") or "Detected city"
+        if city.lower() in _DATACENTER_CITIES:
+            raise ValueError(f"geolocated to known cloud datacenter ({city}); client IP not forwarded")
         return (
             lat,
             lon,
             (data.get("country_code") or "XX").upper(),
-            data.get("city", "") or "Detected city",
+            city,
             data.get("country_name", "") or "Detected country",
             None,
         )
@@ -109,11 +114,14 @@ def get_ip_location(client_ip: str | None = None) -> tuple[float | None, float |
             lon = float(data["longitude"])
             if not _valid_coordinates(lat, lon):
                 raise ValueError("invalid coordinates")
+            city = data.get("city", "") or "Detected city"
+            if city.lower() in _DATACENTER_CITIES:
+                raise ValueError(f"geolocated to known cloud datacenter ({city})")
             return (
                 lat,
                 lon,
                 (data.get("country_code") or "XX").upper(),
-                data.get("city", "") or "Detected city",
+                city,
                 data.get("country", "") or "Detected country",
                 None,
             )
@@ -169,20 +177,20 @@ def init_location_state() -> None:
     for key, value in _LOCATION_DEFAULTS.items():
         st.session_state.setdefault(key, value)
 
+    # Browser geo is async: it returns None on the first call while the permission
+    # dialog is open, then triggers a rerun with real coords. Always check it first
+    # so it can upgrade any previously stored IP/cached location.
+    browser_lat, browser_lon = get_browser_location()
+    if browser_lat is not None and _valid_coordinates(browser_lat, browser_lon):
+        if st.session_state.get("location_source") != "Browser":
+            country_code, city, country_name = reverse_geocode(browser_lat, browser_lon)
+            _store_location(browser_lat, browser_lon, country_code, city, country_name, "Browser")
+        return
+
     if st.session_state.get("_location_detection_complete"):
         return
     if has_location():
         st.session_state._location_detection_complete = True
-        return
-
-    browser_lat, browser_lon = get_browser_location()
-    if (
-        browser_lat is not None
-        and browser_lon is not None
-        and _valid_coordinates(browser_lat, browser_lon)
-    ):
-        country_code, city, country_name = reverse_geocode(browser_lat, browser_lon)
-        _store_location(browser_lat, browser_lon, country_code, city, country_name, "Browser")
         return
 
     lat, lon, country_code, city, country_name, error = get_ip_location(_client_ip())
