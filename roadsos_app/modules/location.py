@@ -8,7 +8,7 @@ from roadsos_app.modules.location_store import load_last_location, save_last_loc
 from roadsos_app.modules.ui import global_sos_card, location_pill
 
 
-IPAPI_URL = "https://ipapi.co/json/"
+IPAPI_BASE_URL = "https://ipapi.co"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 HTTP_TIMEOUT_SECONDS = 3
 REVERSE_GEOCODE_PRECISION = 4
@@ -56,12 +56,29 @@ def get_browser_location() -> tuple[float | None, float | None]:
     return None, None
 
 
-@st.cache_data(ttl=900, show_spinner=False)
-def get_ip_location() -> tuple[float | None, float | None, str, str, str, str | None]:
+def _client_ip() -> str | None:
+    """Extract the real client IP from Streamlit request headers (works on cloud deployments)."""
     try:
-        response = _SESSION.get(IPAPI_URL, timeout=HTTP_TIMEOUT_SECONDS)
+        headers = st.context.headers
+        # X-Forwarded-For may be a comma-separated list; first entry is the client.
+        xff = headers.get("X-Forwarded-For") or headers.get("X-Real-Ip") or ""
+        ip = xff.split(",")[0].strip()
+        return ip if ip else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_ip_location(client_ip: str | None = None) -> tuple[float | None, float | None, str, str, str, str | None]:
+    # Use specific-IP endpoint when we know the client's IP; avoids geolocating
+    # the cloud server's IP (e.g. The Dalles, Oregon) instead of the user's.
+    url = f"{IPAPI_BASE_URL}/{client_ip}/json/" if client_ip else f"{IPAPI_BASE_URL}/json/"
+    try:
+        response = _SESSION.get(url, timeout=HTTP_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
+        if data.get("error"):
+            raise ValueError(data.get("reason", "ipapi returned error"))
         lat = float(data["latitude"])
         lon = float(data["longitude"])
         if not _valid_coordinates(lat, lon):
@@ -140,7 +157,7 @@ def init_location_state() -> None:
         _store_location(browser_lat, browser_lon, country_code, city, country_name, "Browser")
         return
 
-    lat, lon, country_code, city, country_name, error = get_ip_location()
+    lat, lon, country_code, city, country_name, error = get_ip_location(_client_ip())
     if lat is not None and lon is not None:
         _store_location(lat, lon, country_code, city, country_name, "IP")
         return
@@ -213,7 +230,7 @@ def reset_location_detection(*, clear_ip_cache: bool = False) -> None:
     for key, value in _LOCATION_DEFAULTS.items():
         st.session_state[key] = value
     if clear_ip_cache:
-        get_ip_location.clear()
+        get_ip_location.clear()  # clears all cached variants
 
 
 def _store_location(
