@@ -19,6 +19,7 @@ from roadsos_app.modules.road_intelligence import (
     fetch_weather_advisory,
     traffic_summary,
 )
+from roadsos_app.modules.translator import tr
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -129,16 +130,16 @@ def render_section(tab, category: str, services_dict: dict) -> None:
             f"""
 <div style="margin-bottom:1.2rem;">
     {micon(meta['icon'], size=28, color=GREEN, fill=True)}
-    <span style="font-size:1.15rem;font-weight:800;color:{c["TEXT"]};margin-left:8px;font-family:'Outfit';text-transform:uppercase;letter-spacing:0.06em;vertical-align:middle;">{meta['title']}</span>
-    <div style="color:{c["MUTED"]};font-size:0.85rem;margin-top:5px;font-family:'Inter';">{meta['desc']}</div>
+    <span style="font-size:1.15rem;font-weight:800;color:{c["TEXT"]};margin-left:8px;font-family:'Outfit';text-transform:uppercase;letter-spacing:0.06em;vertical-align:middle;">{tr(meta['title'])}</span>
+    <div style="color:{c["MUTED"]};font-size:0.85rem;margin-top:5px;font-family:'Inter';">{tr(meta['desc'])}</div>
 </div>
 """,
             unsafe_allow_html=True,
         )
 
         search = st.text_input(
-            f"Filter {meta['title']}",
-            placeholder=f"Filter {meta['title'].lower()}...",
+            f"{tr('Filter')} {tr(meta['title'])}",
+            placeholder=f"{tr('Filter')} {tr(meta['title']).lower()}...",
             key=f"search_{category}",
             label_visibility="collapsed",
         )
@@ -146,11 +147,11 @@ def render_section(tab, category: str, services_dict: dict) -> None:
             items = [item for item in items if search.lower() in item["name"].lower()]
 
         if not items:
-            placeholder_card(meta["empty"])
+            placeholder_card(tr(meta["empty"]))
             return
 
         if max_results != "All" and len(items) > int(max_results):
-            st.caption(f"Showing the nearest {max_results} of {len(items)} results. Select All in Search Controls to render every listing.")
+            st.caption(f"{tr('Showing the nearest')} {max_results} {tr('of')} {len(items)} {tr('results. Select All in Search Controls to render every listing.')}")
             items = items[: int(max_results)]
 
         cols = st.columns(3)
@@ -164,24 +165,23 @@ def render_section(tab, category: str, services_dict: dict) -> None:
 
 def render_road_intelligence(lat: float, lon: float, radius_m: int, services: dict) -> None:
     st.markdown("---")
-    st.subheader("3D Road Vicinity Intelligence")
+    st.subheader(tr("3D Road Vicinity Intelligence"))
     st.caption(
-        "Optional operational view of verified nearby road topology, current weather exposure, and live traffic signals. "
-        "Emergency contacts above stay available while this heavier layer is loaded."
+        tr("Optional operational view of verified nearby road topology, current weather exposure, and live traffic signals. Emergency contacts above stay available while this heavier layer is loaded.")
     )
     if not st.toggle(
-        "Load live 3D road intelligence",
+        tr("Load live 3D road intelligence"),
         key="road_intelligence_enabled",
-        help="Loads OpenStreetMap road topology, current Open-Meteo conditions, and optional TomTom traffic.",
+        help=tr("Loads OpenStreetMap road topology, current Open-Meteo conditions, and optional TomTom traffic."),
     ):
-        placeholder_card("Emergency contacts are ready. Enable the live 3D layer when road and traffic context is needed.")
+        placeholder_card(tr("Emergency contacts are ready. Enable the live 3D layer when road and traffic context is needed."))
         return
 
     map_view_mode = st.radio(
-        "Map view",
-        ["Road Map", "3D Operations"],
+        tr("Map view"),
+        [tr("Road Map"), tr("3D Operations")],
         horizontal=True,
-        help="Use Road Map for navigation clarity or 3D Operations for elevated traffic and incident signals.",
+        help=tr("Use Road Map for navigation clarity or 3D Operations for elevated traffic and incident signals."),
     )
 
     road_radius_m = min(radius_m, MAX_ROAD_RADIUS_M)
@@ -233,13 +233,13 @@ def render_road_intelligence(lat: float, lon: float, radius_m: int, services: di
             f"""
 <div style="background:{c["CARD_BG"]};border:1px solid {risk_color}44;border-left:4px solid {risk_color};
      border-radius:6px;padding:1rem 1.2rem;margin:1rem 0;color:{c["TEXT"]};font-family:'Inter';">
-    <b style="color:{risk_color};">WEATHER-DERIVED ROAD ADVISORY: {weather["risk"]}</b>
-    <span style="color:{c["MUTED"]};"> &nbsp; {weather["advisory"]}</span><br>
+    <b style="color:{risk_color};">{tr("WEATHER-DERIVED ROAD ADVISORY")}: {tr(weather["risk"])}</b>
+    <span style="color:{c["MUTED"]};"> &nbsp; {tr(weather["advisory"])}</span><br>
     <span style="font-size:0.8rem;color:{c["MUTED"]};">
-        Open-Meteo observation {html.escape(weather["observed_at"])} &nbsp; | &nbsp;
+        {tr("Open-Meteo observation")} {html.escape(weather["observed_at"])} &nbsp; | &nbsp;
         {weather["temperature_c"]:.1f} C &nbsp; | &nbsp;
-        precipitation {weather["precipitation_mm"]:.1f} mm &nbsp; | &nbsp;
-        wind {weather["wind_kmh"]:.1f} km/h
+        {tr("precipitation")} {weather["precipitation_mm"]:.1f} mm &nbsp; | &nbsp;
+        {tr("wind")} {weather["wind_kmh"]:.1f} km/h
     </span>
 </div>
 """,
@@ -276,9 +276,9 @@ def render_road_intelligence(lat: float, lon: float, radius_m: int, services: di
 
 
 with st.sidebar:
-    st.header("Search Controls")
-    radius_km = st.slider("Search radius", 1, 20, 5, format="%d km")
-    max_results = st.selectbox("Results per category", [12, 24, 48, "All"], index=1)
+    st.header(tr("Search Controls"))
+    radius_km = st.slider(tr("Search radius"), 1, 20, 5, format="%d km")
+    max_results = st.selectbox(tr("Results per category"), [12, 24, 48, "All"], index=1)
     service_provider_key = "google" if get_secret("GOOGLE_MAPS_API_KEY") else "osm"
     cache_key = (
         f"{CACHE_SCHEMA_VERSION}_{service_provider_key}_{float(st.session_state.lat):.3f}_{float(st.session_state.lon):.3f}_{radius_km * 1000}"
@@ -286,18 +286,18 @@ with st.sidebar:
         else ""
     )
     if cache_key and is_cache_fresh(cache_key):
-        st.markdown(f":material/check_circle: **Cached** ({cache_age_hours(cache_key):.1f} hrs ago)")
+        st.markdown(f":material/check_circle: **{tr('Cached')}** ({cache_age_hours(cache_key):.1f} {tr('hrs ago')})")
     else:
-        st.markdown(":material/public: **Live fetch**")
+        st.markdown(f":material/public: **{tr('Live fetch')}**")
 
-    if st.button("Refresh Live Data", type="primary", use_container_width=True):
+    if st.button(tr("Refresh Live Data"), type="primary", use_container_width=True):
         st.session_state["_force_service_refresh"] = True
         cached_services.clear()
         cached_road_network.clear()
         cached_weather_advisory.clear()
         cached_live_traffic.clear()
         st.rerun()
-    if st.button("Clear Cache", use_container_width=True):
+    if st.button(tr("Clear Cache"), use_container_width=True):
         clear_cache()
         cached_services.clear()
         cached_road_network.clear()
@@ -319,7 +319,7 @@ emergency_number_strip(st.session_state.get("country_name", "Unknown"), numbers)
 
 if not has_location():
     st.warning(
-        "No real coordinates are available yet. Allow browser location permission or enter coordinates in the sidebar to fetch nearby services."
+        tr("No real coordinates are available yet. Allow browser location permission or enter coordinates in the sidebar to fetch nearby services.")
     )
     st.stop()
 
@@ -408,17 +408,17 @@ else:
         st.warning("Some Google Places enrichment requests could not be completed. Available verified results are shown.")
 
 st.markdown("---")
-st.subheader("Nearby Emergency Contacts")
+st.subheader(tr("Nearby Emergency Contacts"))
 
 tab_labels = [
-    f":material/emergency: Trauma Centres ({counts['trauma_centre']})",
-    f":material/local_hospital: Hospitals ({counts['hospital']})",
-    f":material/local_police: Police ({counts['police']})",
-    f":material/local_fire_department: Fire & Rescue ({counts['fire_station']})",
-    f":material/emergency: Ambulance ({counts['ambulance']})",
-    f":material/directions_car: Towing ({counts['vehicle_rescue']})",
-    f":material/build: Repair ({counts['puncture_shop']})",
-    f":material/storefront: Showrooms ({counts['showroom']})",
+    f":material/emergency: {tr('Trauma Centres')} ({counts['trauma_centre']})",
+    f":material/local_hospital: {tr('Hospitals')} ({counts['hospital']})",
+    f":material/local_police: {tr('Police')} ({counts['police']})",
+    f":material/local_fire_department: {tr('Fire & Rescue')} ({counts['fire_station']})",
+    f":material/emergency: {tr('Ambulance')} ({counts['ambulance']})",
+    f":material/directions_car: {tr('Towing')} ({counts['vehicle_rescue']})",
+    f":material/build: {tr('Repair')} ({counts['puncture_shop']})",
+    f":material/storefront: {tr('Showrooms')} ({counts['showroom']})",
 ]
 tabs = st.tabs(tab_labels)
 

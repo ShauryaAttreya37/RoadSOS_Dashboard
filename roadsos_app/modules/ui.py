@@ -6,6 +6,7 @@ import re
 from urllib.parse import quote_plus
 
 import streamlit as st
+from roadsos_app.modules.translator import tr, LANGUAGES
 
 
 # Color Constants
@@ -937,8 +938,33 @@ def sidebar_brand() -> None:
         DETECTION BEFORE DIAGNOSIS
     </div>
 </div>
-<hr style="border-color:{c["DIVIDER"]};margin:1rem 0;">
 """,
+        unsafe_allow_html=True,
+    )
+
+    # Global Language Selection Dropdown (100 languages)
+    if "selected_language" not in st.session_state:
+        st.session_state.selected_language = "English"
+
+    lang_options = list(LANGUAGES.keys())
+    try:
+        current_index = lang_options.index(st.session_state.selected_language)
+    except ValueError:
+        current_index = 0
+
+    selected_lang = st.sidebar.selectbox(
+        "🌐 Language / भाषा",
+        options=lang_options,
+        index=current_index,
+        key="lang_selector_widget"
+    )
+
+    if selected_lang != st.session_state.selected_language:
+        st.session_state.selected_language = selected_lang
+        st.rerun()
+
+    st.sidebar.markdown(
+        f'<hr style="border-color:{c["DIVIDER"]};margin:1rem 0;">',
         unsafe_allow_html=True,
     )
 
@@ -968,16 +994,17 @@ def page_header(
             f'<span class="{pulse_class}" style="background:{badge_color}18;color:{badge_color};border:1px solid {badge_color}33;'
             "font-family:'Outfit';font-size:0.75rem;font-weight:700;padding:6px 16px;border-radius:8px;"
             'margin-left:16px;vertical-align:middle;text-transform:uppercase;letter-spacing:0.1em;display:inline-block;">'
-            f"{html.escape(badge_text)}</span>"
+            f"{html.escape(tr(badge_text))}"
+            "</span>"
         )
     st.markdown(
         f"""
 <div style="margin-bottom:2rem;">
     <h1 style="color:{c["TEXT"]};margin:0;font-size:2.2rem;font-family:'Outfit';font-weight:800;text-transform:uppercase;letter-spacing:0.08em;display:inline-block;vertical-align:middle;">
-        {icon_html}{html.escape(title)}
+        {icon_html}{html.escape(tr(title))}
     </h1>
     {badge_html}
-    <p style="color:{c["MUTED"]};margin:10px 0 0 0;font-size:1rem;font-family:'Inter';font-weight:400;opacity:0.9;">{html.escape(subtitle)}</p>
+    <p style="color:{c["MUTED"]};margin:10px 0 0 0;font-size:1rem;font-family:'Inter';font-weight:400;opacity:0.9;">{html.escape(tr(subtitle))}</p>
 </div>
 """,
         unsafe_allow_html=True,
@@ -1001,14 +1028,13 @@ def alert_banner(level: str, message: str) -> None:
     <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(90deg, {color}08 0%, transparent 100%);pointer-events:none;"></div>
     <div class="saas-alert-icon" style="color:{color}; border: 2px solid {color}22; background: {color}11;">{icon}</div>
     <div class="saas-alert-content">
-        <div class="saas-alert-title" style="color:{color};">{label}</div>
-        <div class="saas-alert-desc">{html.escape(message)}</div>
+        <div class="saas-alert-title" style="color:{color};">{html.escape(tr(label))}</div>
+        <div class="saas-alert-desc">{html.escape(tr(message))}</div>
     </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
-
 
 
 def saas_metric(label: str, value: str | int | float, unit: str = "", color: str | None = None) -> None:
@@ -1018,9 +1044,9 @@ def saas_metric(label: str, value: str | int | float, unit: str = "", color: str
         f"""
 <div class="saas-card">
     <div class="saas-card-accent" style="background:{display_color} !important;"></div>
-    <div class="saas-metric-label">{html.escape(label)}</div>
+    <div class="saas-metric-label">{html.escape(tr(label))}</div>
     <div class="saas-metric-value" style="color:{display_color} !important;">
-        {html.escape(str(value))}<span class="saas-metric-unit">{html.escape(unit)}</span>
+        {html.escape(tr(str(value)))}<span class="saas-metric-unit">{html.escape(tr(unit))}</span>
     </div>
 </div>
 """,
@@ -1063,16 +1089,16 @@ def global_sos_card(country_name: str, profile: dict[str, object]) -> None:
 <div style="background:{c["CARD_BG"]};border:1px solid {status_color}55;border-left:4px solid {status_color};
      border-radius:12px;padding:14px 16px;margin:0 0 1rem;box-shadow:0 4px 12px rgba(0,0,0,0.16);">
   <div style="color:{status_color};font-family:'Outfit';font-size:0.72rem;font-weight:800;
-       letter-spacing:0.1em;text-transform:uppercase;">{micon("sos", size=18, color=status_color, fill=True)} Global SOS</div>
+       letter-spacing:0.1em;text-transform:uppercase;">{micon("sos", size=18, color=status_color, fill=True)} {tr("Global SOS")}</div>
   <div style="color:{c["TEXT"]};font-size:1.55rem;font-weight:900;font-family:'Outfit';margin:0.25rem 0;">
     {html.escape(sos_number)}
   </div>
   <div style="color:{c["MUTED"]};font-size:0.75rem;line-height:1.45;font-family:'Inter';">
-    {html.escape(country_name)} · {html.escape(coverage)}<br>{html.escape(note)}
+    {html.escape(tr(country_name))} · {html.escape(tr(coverage))}<br>{html.escape(tr(note))}
   </div>
   <a href="tel:{html.escape(sos_number, quote=True)}" class="btn-call"
      style="display:block;text-align:center;margin-top:0.8rem;padding:9px 10px;border-radius:6px;text-decoration:none;">
-    {micon("call", size=17)} Call SOS {html.escape(sos_number)}
+    {micon("call", size=17)} {tr("Call SOS")} {html.escape(sos_number)}
   </a>
 </div>
 """,
@@ -1098,15 +1124,15 @@ def service_card(
     c = get_colors()
     status_color = GREEN if "24" in status else AMBER
     safe_name = html.escape(name)
-    category_line = f'<div class="sc-cat">{html.escape(category)}</div>' if category else ""
+    category_line = f'<div class="sc-cat">{html.escape(tr(category))}</div>' if category else ""
     query = f"{lat},{lon}" if lat is not None and lon is not None else name
     directions_url = html.escape(maps_url or f"https://www.google.com/maps/search/{quote_plus(str(query))}", quote=True)
     phone_clean = "" if not phone or phone == "Not listed" else phone
     phone_href = f"tel:{phone_clean}" if phone_clean else "#"
-    phone_label = html.escape(phone if phone else "Not listed")
+    phone_label = html.escape(tr(phone if phone else "Not listed"))
     address_line = ""
     if address and address != "Not listed":
-        address_line = f'<div class="sc-cat" style="margin:0.5rem 0 1.2rem; font-family:\'Inter\'; opacity:0.8; line-height:1.5;">{html.escape(address)}</div>'
+        address_line = f'<div class="sc-cat" style="margin:0.5rem 0 1.2rem; font-family:\'Inter\'; opacity:0.8; line-height:1.5;">{html.escape(tr(address))}</div>'
     distance_label = "--" if distance_km is None else f"{distance_km:.2f}"
     eta_label = "--" if eta_min is None else str(eta_min)
     st.html(
@@ -1116,7 +1142,7 @@ def service_card(
 <div class="sc-name">{safe_name}</div>
 {category_line}
 </div>
-<span class="sc-badge" style="background:{status_color}18; color:{status_color}; border:1px solid {status_color}33;">{html.escape(status)}</span>
+<span class="sc-badge" style="background:{status_color}18; color:{status_color}; border:1px solid {status_color}33;">{html.escape(tr(status))}</span>
 </div>
 <div class="sc-meta">
 <div style="display:flex; align-items:center; gap:6px;">{micon("location_on", size=18, color=GREEN)} <b>{distance_label}</b> km</div>
@@ -1125,15 +1151,15 @@ def service_card(
 </div>
 {address_line}
 <div class="sc-actions">
-<a href="{phone_href}" class="btn-call">{micon("call", size=17)} Call Now</a>
-<a href="{directions_url}" target="_blank" class="btn-dir">{micon("directions", size=17)} Directions</a>
+<a href="{phone_href}" class="btn-call">{micon("call", size=17)} {tr("Call Now")}</a>
+<a href="{directions_url}" target="_blank" class="btn-dir">{micon("directions", size=17)} {tr("Directions")}</a>
 </div>
 </div>"""
     )
 
 
 def placeholder_card(message: str) -> None:
-    st.markdown(f'<div class="placeholder-card" style="padding:3rem !important; opacity:0.8; border-radius:12px;">{html.escape(message)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="placeholder-card" style="padding:3rem !important; opacity:0.8; border-radius:12px;">{html.escape(tr(message))}</div>', unsafe_allow_html=True)
 
 
 def blood_badge(bg: str) -> str:
@@ -1153,6 +1179,7 @@ def initials(name: str) -> str:
     if not parts:
         return "RS"
     return "".join(part[0].upper() for part in parts[:2])
+
 
 
 def eta_from_distance(distance_km: float | None) -> int | None:

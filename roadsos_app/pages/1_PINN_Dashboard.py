@@ -14,6 +14,7 @@ from roadsos_app.modules.location import has_location, init_location_state, rend
 from roadsos_app.modules.profile_store import load_profile
 from roadsos_app.modules.simulation import simulate_crash, simulate_normal, simulate_oil_patch
 from roadsos_app.modules.train import train_default
+from roadsos_app.modules.translator import tr
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -102,6 +103,84 @@ def run_selected_scenario(scenario: str, duration: int) -> dict:
     result["scenario"] = scenario
     return result
 
+SEVERITY_HEADLINE = {
+    "SEVERE": ("CRITICAL", "Life-threatening head and brain loading detected. Treat as major trauma and act immediately."),
+    "MODERATE": ("CONCERNING", "Injury thresholds were partly crossed. The rider needs close monitoring and likely medical care."),
+    "LOW": ("MINOR", "Readings stayed within safe limits — no impact or skid signature in this window."),
+}
+
+
+st.set_page_config(page_title="RoadSoS | Helmet Intelligence", page_icon=":material/sports_motorsports:", layout="wide")
+inject_global_css()
+init_location_state()
+sidebar_brand()
+render_theme_toggle()
+render_location_sidebar()
+
+c = get_colors()
+is_dark = get_theme() == "dark"
+
+plt.style.use("dark_background")
+
+
+SEVERITY_COLORS = {
+    "SEVERE": (RED, "#1F0808" if is_dark else "#FFF5F5"),
+    "MODERATE": (AMBER, "#1F1408" if is_dark else "#FFFBF5"),
+    "LOW": (GREEN, "#081F0D" if is_dark else "#F7FFF7"),
+}
+
+
+def styled_plot(title: str, x, y, line_color: str, threshold: float, threshold_label: str, ylabel: str):
+    fig, ax = plt.subplots(figsize=(7, 3))
+    
+    # Pure dark theme surfaces (enforcing dark mode per RULE[AGENTS.md])
+    fig.patch.set_facecolor("#050505")
+    ax.set_facecolor("#0F1115")
+    
+    ax.tick_params(colors="#8B949E", labelsize=8)
+    ax.xaxis.label.set_color("#8B949E")
+    ax.yaxis.label.set_color("#8B949E")
+    
+    # Grid lines - high-precision, sharp, dark oscilloscope grids
+    ax.grid(color="#1F232B", linewidth=0.5, linestyle="-", alpha=0.8)
+    
+    # Neon glowing signal lines (double line rendering)
+    # Glow layer (wider, highly-translucent line)
+    ax.plot(x, y, color=line_color, linewidth=4.0, alpha=0.35)
+    # Primary telemetry trace (sharp foreground line)
+    ax.plot(x, y, color=line_color, linewidth=1.5)
+    
+    # Gradient/backlighting area fill-under signal path
+    ax.fill_between(x, y, 0, color=line_color, alpha=0.08)
+    
+    # Warning/impact threshold line with amber neon glow
+    ax.axhline(threshold, color=AMBER, linewidth=1.0, linestyle="--", label=threshold_label)
+    
+    # Title & Labeling
+    ax.set_title(title.upper(), color="#F0F6FC", pad=12, fontsize=10, fontweight="bold", fontfamily="sans-serif")
+    ax.set_xlabel("TIME (S)", fontsize=8, fontweight="bold")
+    ax.set_ylabel(ylabel.upper(), fontsize=8, fontweight="bold")
+    
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#22252A")
+        
+    ax.legend(facecolor="#0F1115", edgecolor="#22252A", labelcolor="#F0F6FC", fontsize=8)
+    
+    st.pyplot(fig, width="stretch")
+    plt.close(fig)
+
+
+def run_selected_scenario(scenario: str, duration: int) -> dict:
+    scenario_map = {
+        "Normal Riding": (simulate_normal, {"duration": duration, "seed": 42}, 50),
+        "Oil Patch": (simulate_oil_patch, {"duration": duration, "seed": 43}, 50),
+        "Crash": (simulate_crash, {"duration": min(duration, 10), "seed": 44}, 1000),
+    }
+    sim_fn, kwargs, fs = scenario_map[scenario]
+    result = run_inference(sim_fn, kwargs, fs=fs)
+    result["scenario"] = scenario
+    return result
+
 
 SEVERITY_HEADLINE = {
     "SEVERE": ("CRITICAL", "Life-threatening head and brain loading detected. Treat as major trauma and act immediately."),
@@ -115,7 +194,7 @@ def section_title(text: str, color: str = GREEN) -> None:
         f"""
 <div style="font-family:'Outfit';font-weight:800;font-size:1rem;color:{c["TEXT"]};
      text-transform:uppercase;letter-spacing:0.06em;margin:1.6rem 0 0.8rem;
-     border-left:3px solid {color};padding-left:0.7rem;">{text}</div>
+     border-left:3px solid {color};padding-left:0.7rem;">{tr(text)}</div>
 """,
         unsafe_allow_html=True,
     )
@@ -126,8 +205,8 @@ def info_card(title: str, body_html: str, color: str) -> None:
         f"""
 <div class="saas-card" style="border-left:4px solid {color} !important; padding: 1.2rem !important; margin-bottom: 0.8rem !important;">
     <div style="color:{color};font-family:'Outfit';font-weight:800;font-size:0.72rem;
-         text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem;">{title}</div>
-    <div style="color:{c["TEXT"]};font-size:0.86rem;line-height:1.55;font-family:'Inter';">{body_html}</div>
+         text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem;">{tr(title)}</div>
+    <div style="color:{c["TEXT"]};font-size:0.86rem;line-height:1.55;font-family:'Inter';">{tr(body_html)}</div>
 </div>
 """,
         unsafe_allow_html=True,
@@ -140,7 +219,7 @@ def insight_row(icon: str, body_html: str, color: str) -> None:
 <div style="background:{c["CARD_BG"]}; border: 1px solid {c["BORDER"]}; border-left: 3px solid {color};
      border-radius: 4px; padding: 1rem; margin-bottom: 0.6rem; display: flex; gap: 0.8rem; align-items: flex-start;">
     {micon(icon, size=22, color=color, fill=True)}
-    <span style="color:{c["TEXT"]}; font-size: 0.9rem; line-height: 1.6; font-family: 'Inter';">{body_html}</span>
+    <span style="color:{c["TEXT"]}; font-size: 0.9rem; line-height: 1.6; font-family: 'Inter';">{tr(body_html)}</span>
 </div>
 """,
         unsafe_allow_html=True,
@@ -226,27 +305,27 @@ def render_graph_insights(result: dict, ares: np.ndarray, peak_accel: float, ski
 
 
 with st.sidebar:
-    st.header("Simulation Controls")
-    scenario = st.selectbox("Scenario", ["Normal Riding", "Oil Patch", "Crash"])
-    duration = st.slider("Duration", 5, 30, 8, format="%d sec")
+    st.header(tr("Simulation Controls"))
+    scenario = st.selectbox(tr("Scenario"), ["Normal Riding", "Oil Patch", "Crash"])
+    duration = st.slider(tr("Duration"), 5, 30, 8, format="%d sec")
     profile = load_profile()
-    with st.expander("Rider Profile", expanded=True):
+    with st.expander(tr("Rider Profile"), expanded=True):
         blood_options = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"]
-        rider_name = st.text_input("Name", profile["rider_name"])
+        rider_name = st.text_input(tr("Name"), profile["rider_name"])
         blood_group = st.selectbox(
-            "Blood Group",
+            tr("Blood Group"),
             blood_options,
             index=blood_options.index(profile["blood_group"]) if profile["blood_group"] in blood_options else 0,
         )
-        allergies = st.text_input("Allergies", profile["allergies"])
-        conditions = st.text_input("Medical Conditions", profile["conditions"])
-        emergency_contact = st.text_input("Emergency Contact", profile["emergency_contact"])
+        allergies = st.text_input(tr("Allergies"), profile["allergies"])
+        conditions = st.text_input(tr("Medical Conditions"), profile["conditions"])
+        emergency_contact = st.text_input(tr("Emergency Contact"), profile["emergency_contact"])
         st.session_state.rider_name = rider_name
         st.session_state.blood_group = blood_group
         st.session_state.allergies = allergies
         st.session_state.conditions = conditions
         st.session_state.emergency_contact = emergency_contact
-    run_clicked = st.button("Run Simulation", type="primary")
+    run_clicked = st.button(tr("Run Simulation"), type="primary")
 
 page_header("Helmet Intelligence", "PINN skid prediction and crash severity simulation.", "TraumaSense AI v1.0", AMBER, icon="sports_motorsports")
 
@@ -323,10 +402,10 @@ if crash_detected:
     st.markdown(
         f"""
 <div style="font-size:1.1rem; font-weight:800; color:{RED}; margin-bottom:0.5rem; font-family:'Outfit'; text-transform:uppercase; letter-spacing:0.06em;">
-    {micon("stethoscope", size=24, color=RED, fill=True)} AI-Generated First Aid — Based on This Crash Profile
+    {micon("stethoscope", size=24, color=RED, fill=True)} {tr("AI-Generated First Aid — Based on This Crash Profile")}
 </div>
 <div style="color:{c["MUTED"]}; font-size:0.85rem; margin-bottom:1.2rem; font-family:'Inter';">
-    Generated using PINN biomechanical outputs (HIC15={result['hic15']:.0f}, BrIC={result['bric']:.3f}, Severity={result['label']})
+    {tr("Generated using PINN biomechanical outputs")} (HIC15={result['hic15']:.0f}, BrIC={result['bric']:.3f}, Severity={tr(result['label'])})
 </div>
 """,
         unsafe_allow_html=True,
@@ -339,9 +418,9 @@ if crash_detected:
 <div class="ai-insight-card">
     <div class="ai-insight-header">
         {micon("stethoscope", size=26, color=sev_color, fill=True)}
-        <div class="ai-insight-title">Biomechanical Severity · {sev_word}</div>
+        <div class="ai-insight-title">{tr("Biomechanical Severity")} · {tr(sev_word)}</div>
     </div>
-    <div style="color:{c["TEXT"]}; font-size:0.92rem; line-height:1.6; font-family:'Inter'; margin-bottom: 1.2rem;">{sev_text}</div>
+    <div style="color:{c["TEXT"]}; font-size:0.92rem; line-height:1.6; font-family:'Inter'; margin-bottom: 1.2rem;">{tr(sev_text)}</div>
 """,
         unsafe_allow_html=True,
     )
@@ -384,56 +463,9 @@ if crash_detected:
         sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
         sos_number = sos_profile["unified"]
         st.markdown(
-            f'<a href="tel:{sos_number}" class="btn-call" style="display:block; text-align:center; padding:12px; border-radius: 4px; margin-top: 1rem;">{micon("sos", size=17)} Call Global SOS ({sos_number})</a>',
+            f'<a href="tel:{sos_number}" class="btn-call" style="display:block; text-align:center; padding:12px; border-radius: 4px; margin-top: 1rem;">{micon("sos", size=17)} {tr("Call Global SOS")} ({sos_number})</a>',
             unsafe_allow_html=True,
         )
-    with col2:
-        if has_location():
-            maps_url = (
-                "https://www.google.com/maps/search/hospital+near+me/"
-                f"@{float(st.session_state.lat):.6f},{float(st.session_state.lon):.6f},14z"
-            )
-            st.markdown(
-                f'<a href="{maps_url}" target="_blank" class="btn-dir" style="display:block; text-align:center; padding:12px; border-radius: 4px; margin-top: 1rem;">{micon("local_hospital", size=17)} Find Nearest Hospital</a>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f'<div class="placeholder-card" style="text-align:center; padding:12px; margin-top:1rem; border-radius: 4px;">Enable location to find the nearest hospital.</div>',
-                unsafe_allow_html=True,
-            )
-
-st.markdown(
-    f"""
-<div class="profile-card" style="padding:1.5rem; margin-top:1.5rem; border-radius: 8px;">
-  <div style="color:{c["MUTED"]}; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem; font-family:'Outfit'; font-weight:700;">
-    Rider SOS Profile
-  </div>
-  <div style="color:{c["TEXT"]}; font-weight:800; font-family:'Outfit'; font-size:1.2rem; text-transform:uppercase; letter-spacing:0.04em;">{rider_name}</div>
-  <div style="color:{c["MUTED"]}; font-size:0.92rem; margin-top:0.4rem; font-family:'Inter';">
-    Blood: <b style="color:{GREEN};">{blood_group}</b> · Allergies:
-    <b style="color:{GREEN};">{allergies}</b> · Emergency:
-    <b style="color:{GREEN};">{emergency_contact}</b>
-  </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
-
-with st.expander("Train / Retrain PINN"):
-    model, _, _ = load_model()
-    if model is None:
-        st.markdown('<div class="placeholder-card" style="border-radius: 8px;">No checkpoint found. Inference is using simulated friction until a checkpoint is trained.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="placeholder-card" style="border-radius: 8px;">Checkpoint loaded from roadsos_app/artifacts/roadsos_pinn.pt</div>', unsafe_allow_html=True)
-
-    if st.button("Train / Retrain PINN", key="train_pinn"):
-        progress = st.progress(0)
-        with st.spinner("Training compact demo checkpoint..."):
-            history = train_default(epochs=25)
-            progress.progress(100)
-        load_model.clear()
-        st.markdown('<div class="placeholder-card" style="border-radius: 8px; border-color: #76B900;">Saved artifacts/roadsos_pinn.pt</div>', unsafe_allow_html=True)
         
         fig, ax = plt.subplots(figsize=(7, 3))
         fig.patch.set_facecolor("#050505")

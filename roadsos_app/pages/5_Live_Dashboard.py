@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
 from roadsos_app.modules.profile_store import load_profile
+from roadsos_app.modules.translator import tr
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -140,27 +141,27 @@ def _rolling_chart(title: str, t, values, threshold: float, line_color: str,
 # ── Sidebar controls ──────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.header("Live Controls")
+    st.header(tr("Live Controls"))
     scenario = st.selectbox(
-        "Scenario",
+        tr("Scenario"),
         ["Normal Riding", "Oil Patch", "Crash"],
         index=["Normal Riding", "Oil Patch", "Crash"].index(st.session_state.live_scenario),
     )
     st.session_state.live_scenario = scenario
     refresh_ms = st.select_slider(
-        "Refresh rate",
+        tr("Refresh rate"),
         options=[500, 1000, 2000, 3000],
         value=1000,
         format_func=lambda v: f"{v} ms",
     )
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button(":material/play_arrow: Start" if not st.session_state.live_running else ":material/pause: Pause",
-                     type="primary", use_container_width=True):
+        label_btn = f":material/pause: {tr('Pause')}" if st.session_state.live_running else f":material/play_arrow: {tr('Start')}"
+        if st.button(label_btn, type="primary", use_container_width=True):
             st.session_state.live_running = not st.session_state.live_running
             st.rerun()
     with col_b:
-        if st.button(":material/restart_alt: Reset", use_container_width=True):
+        if st.button(f":material/restart_alt: {tr('Reset')}", use_container_width=True):
             for k in ["live_tick", "live_buf_ax", "live_buf_ay", "live_buf_az",
                       "live_buf_t", "live_buf_skid", "live_sos_fired", "live_alerts"]:
                 if k in st.session_state:
@@ -170,13 +171,13 @@ with st.sidebar:
 
     st.markdown("---")
     profile = load_profile()
-    rider_saved_at = profile.get("saved_at") or "not saved yet"
+    rider_saved_at = profile.get("saved_at") or tr("not saved yet")
     st.markdown(
         f"""
 <div style="font-size:0.8rem;color:{c["MUTED"]};">
   {micon("save", size=16, color=GREEN)} <b style="color:{c["TEXT"]};">{profile['rider_name']}</b><br>
   {profile['blood_group']} · {profile['emergency_contact']}<br>
-  <span style="font-size:0.72rem;">Saved: {rider_saved_at}</span>
+  <span style="font-size:0.72rem;">{tr("Saved")}: {tr(rider_saved_at)}</span>
 </div>
 """,
         unsafe_allow_html=True,
@@ -239,7 +240,7 @@ if not buf_t:
         f"""
 <div style="background:{c["CARD_BG"]};border:1px solid {c["BORDER"]};border-radius:2px;
      padding:1.2rem 1.5rem;margin-bottom:1.5rem;color:{c["MUTED"]};text-align:center;">
-    Press <b style="color:{c["TEXT"]};">{micon("play_arrow", size=16, color=GREEN)} Start</b> in the sidebar to begin the live sensor stream.
+    {tr("Press")} <b style="color:{c["TEXT"]};">{micon("play_arrow", size=16, color=GREEN)} {tr("Start")}</b> {tr("in the sidebar to begin the live sensor stream.")}
 </div>
 """,
         unsafe_allow_html=True,
@@ -249,16 +250,16 @@ elif crash_detected:
         st.session_state.live_sos_fired = True
         ts = time.strftime("%H:%M:%S")
         st.session_state.live_alerts.append(
-            f"{ts} — CRASH at {peak_accel:.1f}g — call Global SOS {sos_profile['unified']}"
+            f"{ts} — {tr('CRASH')} at {peak_accel:.1f}g — {tr('call Global SOS')} {sos_profile['unified']}"
         )
     alert_banner(
         "crash",
-        f"Impact {peak_accel:.1f}g — SOS packet ready. Call Global SOS {sos_profile['unified']} now.",
+        f"{tr('Impact')} {peak_accel:.1f}g — {tr('SOS packet ready. Call Global SOS')} {sos_profile['unified']} {tr('now')}.",
     )
 elif skid_detected:
-    alert_banner("warning", f"P(skid)={skid_max:.2f} — Low-friction surface detected. Haptic alert firing.")
+    alert_banner("warning", f"{tr('P(skid)')}={skid_max:.2f} — {tr('Low-friction surface detected. Haptic alert firing.')}")
 else:
-    alert_banner("safe", "IMU stream remains below safe thresholds.")
+    alert_banner("safe", tr("IMU stream remains below safe thresholds."))
 
 # ── Stat cards ────────────────────────────────────────────────────────────────
 
@@ -291,7 +292,7 @@ if buf_t:
 if st.session_state.live_alerts:
     st.markdown("---")
     st.markdown(
-        f'<div style="color:{RED};font-weight:700;margin-bottom:0.5rem;">{micon("warning", size=20, color=RED, fill=True)} SOS Event Log</div>',
+        f'<div style="color:{RED};font-weight:700;margin-bottom:0.5rem;">{micon("warning", size=20, color=RED, fill=True)} {tr("SOS Event Log")}</div>',
         unsafe_allow_html=True,
     )
     for entry in reversed(st.session_state.live_alerts[-10:]):
@@ -299,7 +300,7 @@ if st.session_state.live_alerts:
         st.markdown(
             f'<div style="background:{bg};border:1px solid {RED}44;border-radius:2px;'
             f'padding:0.5rem 1rem;margin-bottom:0.4rem;font-size:0.85rem;color:{c["TEXT"]};">'
-            f'{micon("bolt", size=16, color=RED, fill=True)} {entry}</div>',
+            f'{micon("bolt", size=16, color=RED, fill=True)} {tr(entry)}</div>',
             unsafe_allow_html=True,
         )
 

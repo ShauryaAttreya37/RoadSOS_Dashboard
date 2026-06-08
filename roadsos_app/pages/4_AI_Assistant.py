@@ -1,5 +1,6 @@
 import html
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -11,6 +12,7 @@ from roadsos_app.modules.ai_context import build_incident_context
 from roadsos_app.modules.config import get_secret
 from roadsos_app.modules.emergency_numbers import get_global_sos_profile
 from roadsos_app.modules.location import init_location_state, render_location_sidebar
+from roadsos_app.modules.translator import tr
 from roadsos_app.modules.ui import (
     AMBER,
     GREEN,
@@ -59,16 +61,51 @@ DEFAULT_OPENROUTER_MODEL = "openrouter/auto"
 DEFAULT_ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
 
 
-def emergency_fallback(error: str) -> str:
+MAX_REQUESTS_PER_MIN = 5
+MAX_TOKENS_PER_SESSION = 4000
+
+
+def check_and_update_limits(prompt_text: str) -> tuple[bool, str]:
+    if "openrouter_requests" not in st.session_state:
+        st.session_state.openrouter_requests = []
+    if "openrouter_tokens" not in st.session_state:
+        st.session_state.openrouter_tokens = 0
+
+    now = time.time()
+    st.session_state.openrouter_requests = [
+        t for t in st.session_state.openrouter_requests if now - t < 60
+    ]
+
+    if len(st.session_state.openrouter_requests) >= MAX_REQUESTS_PER_MIN:
+        return True, "Rate limit exceeded (max 5 requests per minute)"
+
+    estimated_prompt_tokens = len(prompt_text) // 4
+    if st.session_state.openrouter_tokens + estimated_prompt_tokens > MAX_TOKENS_PER_SESSION:
+        return True, "Token quota exhausted (max 4,000 tokens per session)"
+
+    st.session_state.openrouter_requests.append(now)
+    st.session_state.openrouter_tokens += estimated_prompt_tokens
+    return False, ""
+
+
+def get_medical_guidance_fallback(reason: str) -> str:
     sos_profile = get_global_sos_profile(str(st.session_state.get("country_code", "XX")))
-    return (
-        f"{error}\n\n"
-        f"1. Call Global SOS {sos_profile['unified']} immediately for a serious crash.\n"
-        "2. Do not move the rider unless the scene is unsafe.\n"
-        "3. Check breathing and look for heavy bleeding.\n"
-        "4. Keep the rider warm and still.\n"
-        "5. Share the GPS location and medical profile with responders."
+    guidance = (
+        f"⚠️ **RoadSoS AI Notice: OpenRouter API limits or key quota exhausted ({reason}). Switch to Local Emergency Mode.**\n\n"
+        f"### EMERGENCY FIRST-AID INSTRUCTIONS\n\n"
+        f"**1. Call Emergency Services**: Contact **{sos_profile['unified']}** immediately to request a trauma ambulance. Share the rider's name, blood group, and location: **{st.session_state.get('city', 'Unknown')} ({st.session_state.get('lat', 'Unknown')}, {st.session_state.get('lon', 'Unknown')})**.\n"
+        f"**2. Protect the Victim and Scene**: Do **NOT** move the rider or remove their helmet unless there is an immediate danger of fire, oncoming traffic, or drowning. Moving the victim can cause permanent spinal cord injury.\n"
+        f"**3. Check Airway & Breathing**: Ensure the rider's airway is clear. Do not administer any food, water, or oral fluids.\n"
+        f"**4. Control Heavy Bleeding**: Apply firm, direct pressure to any actively bleeding wounds using clean cloth, sterile gauze, or clothing.\n"
+        f"**5. Provide Comfort and Prepare Handoff**: Keep the rider still and warm. Keep the scannable **Rider Profile QR Code** ready for paramedic arrivals.\n\n"
+        f"--- \n"
+        f"*This is an automated, offline emergency fallback message.*"
     )
+    return tr(guidance)
+
+
+def emergency_fallback(error: str) -> str:
+    return get_medical_guidance_fallback(error)
 
 
 def render_user(message: str) -> None:
@@ -154,11 +191,24 @@ def get_openrouter_config() -> tuple[str | None, str, str | None]:
 def ask_openrouter() -> str:
     api_key, model, error = get_openrouter_config()
     if error:
-        return emergency_fallback(error)
+        return get_medical_guidance_fallback(error)
+
+    # 1. Local limit checks and system prompt language adjustment
+    prompt_context = build_incident_context()
+    selected_lang = st.session_state.get("selected_language", "English")
+    lang_instruction = ""
+    if selected_lang != "English":
+        lang_instruction = f"\nCRITICAL: You MUST respond in the language '{selected_lang}'."
+
+    full_prompt = f"{SYSTEM_PROMPT}{lang_instruction}\n\n{prompt_context}"
+
+    is_exhausted, reason = check_and_update_limits(full_prompt)
+    if is_exhausted:
+        return get_medical_guidance_fallback(reason)
 
     try:
         import json as _json
-        system_prompt = f"{SYSTEM_PROMPT}\n\n{build_incident_context()}"
+        system_prompt = full_prompt
 
         response = requests.post(
             OPENROUTER_API_URL,
@@ -177,8 +227,13 @@ def ask_openrouter() -> str:
             stream=True,
             timeout=(6, 60),
         )
+
+        if response.status_code in [401, 402, 403, 429]:
+            return get_medical_guidance_fallback(f"API Credit/Rate Exhausted: {response.status_code}")
+
         response.raise_for_status()
 
+        response_text = []
         def _token_stream():
             for raw_line in response.iter_lines():
                 if not raw_line:
@@ -194,13 +249,21 @@ def ask_openrouter() -> str:
                     delta = chunk["choices"][0].get("delta", {})
                     token = delta.get("content") or ""
                     if token:
+                        response_text.append(token)
                         yield token
                 except Exception:
                     continue
 
-        return st.write_stream(_token_stream())
+        full_response = st.write_stream(_token_stream())
+
+        # Track output tokens
+        output_tokens = len(full_response) // 4
+        if "openrouter_tokens" in st.session_state:
+            st.session_state.openrouter_tokens += output_tokens
+
+        return full_response
     except Exception as exc:
-        return emergency_fallback(f"RoadSoS AI could not reach OpenRouter: {exc}")
+        return get_medical_guidance_fallback(f"Request failed: {exc}")
 
 
 def ask_ai(provider: str) -> str:
@@ -223,10 +286,10 @@ def provider_options() -> list[str]:
 
 
 with st.sidebar:
-    ai_provider = st.selectbox("AI Provider", provider_options())
+    ai_provider = st.selectbox(tr("AI Provider"), provider_options())
 
 provider_badge = ai_provider
-page_header("RoadSoS AI Assistant", "Road safety expert · First-aid guide · Legal advisor", f"Powered by {provider_badge}", AMBER, icon="smart_toy")
+page_header(tr("RoadSoS AI Assistant"), tr("Road safety expert · First-aid guide · Legal advisor"), f"{tr('Powered by')} {provider_badge}", AMBER, icon="smart_toy")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -237,15 +300,15 @@ else:
     client, setup_error = get_anthropic_client()
     del client
 if setup_error:
-    alert_banner("warning", setup_error)
+    alert_banner("warning", tr(setup_error))
 
 if not st.session_state.messages:
     prompt_cols = st.columns(4)
     suggestions = [
-        "What do I do if I witness an accident?",
-        "Signs of internal bleeding?",
-        "Can police refuse to help?",
-        "How to stabilize a crash victim?",
+        tr("What do I do if I witness an accident?"),
+        tr("Signs of internal bleeding?"),
+        tr("Can police refuse to help?"),
+        tr("How to stabilize a crash victim?"),
     ]
     for idx, suggestion in enumerate(suggestions):
         with prompt_cols[idx]:
@@ -261,8 +324,8 @@ if not st.session_state.messages:
     chat_html += f"""
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-height:300px; color:{c["MUTED"]}; font-family:'Inter'; font-size:0.9rem;">
         <span style="margin-bottom:1rem;">{micon("smart_toy", size=52, color=GREEN, fill=True)}</span>
-        <span style="font-family:'Outfit'; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:{c["TEXT"]};">RoadSoS AI Active</span>
-        <span style="margin-top:0.4rem; opacity:0.8;">No messages yet. Ask a question or click one of the suggestions below to start!</span>
+        <span style="font-family:'Outfit'; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:{c["TEXT"]};">{tr("RoadSoS AI Active")}</span>
+        <span style="margin-top:0.4rem; opacity:0.8;">{tr("No messages yet. Ask a question or click one of the suggestions below to start!")}</span>
     </div>
     """
 else:
@@ -295,7 +358,7 @@ else:
 chat_html += "</div>"
 st.html(chat_html)
 
-incoming = st.chat_input("Ask about first aid, legal rights, emergency procedures...")
+incoming = st.chat_input(tr("Ask about first aid, legal rights, emergency procedures..."))
 if not incoming and st.session_state.get("pending_prompt"):
     incoming = st.session_state.pop("pending_prompt")
 
